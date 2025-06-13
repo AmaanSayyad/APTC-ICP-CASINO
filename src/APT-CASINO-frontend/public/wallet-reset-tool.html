@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wallet Connection Reset Tool</title>
+    <style>
+      body {
+        font-family: "Arial", sans-serif;
+        background-color: #121212;
+        color: #f0f0f0;
+        line-height: 1.6;
+        padding: 20px;
+        max-width: 800px;
+        margin: 0 auto;
+      }
+      h1 {
+        color: #bb86fc;
+        border-bottom: 2px solid #3d3d3d;
+        padding-bottom: 10px;
+      }
+      h2 {
+        color: #03dac6;
+        margin-top: 30px;
+      }
+      .card {
+        background-color: #1e1e1e;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 20px 0;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+      button {
+        background-color: #bb86fc;
+        color: #000;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        margin: 10px 5px 10px 0;
+        transition: background-color 0.3s;
+      }
+      button:hover {
+        background-color: #a370d8;
+      }
+      button.danger {
+        background-color: #cf6679;
+      }
+      button.danger:hover {
+        background-color: #b55667;
+      }
+      .code {
+        background-color: #2d2d2d;
+        padding: 15px;
+        border-radius: 4px;
+        font-family: monospace;
+        overflow-x: auto;
+        white-space: pre;
+      }
+      .success {
+        color: #03dac6;
+      }
+      .error {
+        color: #cf6679;
+      }
+      .warning {
+        color: #ffb74d;
+      }
+      .log-container {
+        height: 200px;
+        overflow-y: auto;
+        background-color: #2d2d2d;
+        padding: 10px;
+        border-radius: 4px;
+        font-family: monospace;
+        margin-top: 10px;
+      }
+      #consoleOutput {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>APT-CASINO Wallet Connection Reset Tool</h1>
+
+    <div class="card">
+      <h2>Authentication Issues</h2>
+      <p>
+        If you're experiencing issues with wallet authentication, token
+        approvals, or bet placement, you may need to reset your wallet
+        connection. This tool will help you:
+      </p>
+      <ul>
+        <li>Clear expired delegation certificates</li>
+        <li>Remove cached authentication data</li>
+        <li>Reset your wallet connection for a fresh start</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Diagnostic Tools</h2>
+      <p>First, let's diagnose your current wallet connection status:</p>
+      <button id="diagnoseBtn">Diagnose Wallet Connection</button>
+
+      <div class="log-container">
+        <div id="consoleOutput"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Reset Options</h2>
+      <p>Choose one of the following reset options:</p>
+
+      <button id="clearCacheBtn">Clear Delegation Cache Only</button>
+      <button id="resetWalletBtn" class="danger">
+        Complete Wallet Reset (Recommended)
+      </button>
+
+      <div class="code">
+        <p class="warning">⚠️ After reset, you will need to:</p>
+        <ol>
+          <li>Reconnect your wallet</li>
+          <li>Approve token transactions again</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Manual Recovery Steps</h2>
+      <p>If the automatic reset doesn't resolve your issue, try these steps:</p>
+      <ol>
+        <li>
+          Open your browser's developer console (F12 or Right-click → Inspect →
+          Console)
+        </li>
+        <li>
+          Run this command to diagnose issues:
+          <code>walletTools.diagnoseWallet()</code>
+        </li>
+        <li>
+          Run this command for a complete reset:
+          <code>walletTools.resetWallet()</code>
+        </li>
+        <li>Clear browser cookies and site data for the APT-CASINO domain</li>
+        <li>Reload the page and reconnect your wallet</li>
+      </ol>
+    </div>
+
+    <script src="wallet-reset-guide.js"></script>
+    <script>
+      // Console output redirection
+      const consoleOutput = document.getElementById("consoleOutput");
+      const originalConsoleLog = console.log;
+      const originalConsoleError = console.error;
+      const originalConsoleWarn = console.warn;
+
+      // Override console methods to also display in our UI
+      console.log = function (...args) {
+        originalConsoleLog.apply(console, args);
+        appendToConsole(args.join(" "), "log");
+      };
+
+      console.error = function (...args) {
+        originalConsoleError.apply(console, args);
+        appendToConsole(args.join(" "), "error");
+      };
+
+      console.warn = function (...args) {
+        originalConsoleWarn.apply(console, args);
+        appendToConsole(args.join(" "), "warning");
+      };
+
+      function appendToConsole(text, type) {
+        const element = document.createElement("div");
+        element.textContent = text;
+        if (type === "error") element.className = "error";
+        if (type === "warning") element.className = "warning";
+        if (type === "success") element.className = "success";
+        consoleOutput.appendChild(element);
+        // Auto-scroll to bottom
+        const container = document.querySelector(".log-container");
+        container.scrollTop = container.scrollHeight;
+      }
+
+      // Button handlers
+      document
+        .getElementById("diagnoseBtn")
+        .addEventListener("click", function () {
+          consoleOutput.innerHTML = "";
+          console.log("Running wallet connection diagnosis...");
+
+          try {
+            const result = window.walletTools.diagnoseWallet();
+
+            if (result.delegationKeysCount > 0) {
+              console.log(
+                "✅ Found delegation data. Checking if it's valid..."
+              );
+            } else {
+              console.warn(
+                "⚠️ No delegation data found. You may need to reconnect your wallet."
+              );
+            }
+
+            if (result.walletKeysCount === 0) {
+              console.error(
+                "❌ No wallet data found at all. You need to connect your wallet."
+              );
+            }
+          } catch (e) {
+            console.error("Error during diagnosis:", e.message);
+          }
+        });
+
+      document
+        .getElementById("clearCacheBtn")
+        .addEventListener("click", function () {
+          consoleOutput.innerHTML = "";
+          console.log("Clearing delegation cache only...");
+
+          try {
+            // Basic cache clearing
+            Object.keys(localStorage).forEach((key) => {
+              if (key.includes("delegation")) {
+                console.log(`Removing ${key} from localStorage`);
+                localStorage.removeItem(key);
+              }
+            });
+
+            console.log("✅ Delegation cache cleared successfully.");
+            console.log(
+              "Please reload the main app and reconnect your wallet."
+            );
+          } catch (e) {
+            console.error("Error clearing cache:", e.message);
+          }
+        });
+
+      document
+        .getElementById("resetWalletBtn")
+        .addEventListener("click", function () {
+          if (
+            confirm(
+              "Are you sure you want to completely reset your wallet connection? You will need to reconnect after this."
+            )
+          ) {
+            consoleOutput.innerHTML = "";
+            console.log("Performing complete wallet reset...");
+
+            try {
+              window.walletTools.resetWallet();
+            } catch (e) {
+              console.error("Error during wallet reset:", e.message);
+            }
+          }
+        });
+
+      // Initial message
+      console.log(
+        "Wallet reset tool loaded. Use the buttons above to diagnose or reset your wallet connection."
+      );
+    </script>
+  </body>
+</html>

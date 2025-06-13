@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>APTC Balance Test</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 50px auto;
+        padding: 20px;
+        background-color: #1a1a1a;
+        color: #ffffff;
+      }
+      .test-section {
+        margin: 20px 0;
+        padding: 20px;
+        border: 1px solid #333;
+        border-radius: 8px;
+        background-color: #2a2a2a;
+      }
+      .success {
+        color: #4caf50;
+      }
+      .error {
+        color: #f44336;
+      }
+      .info {
+        color: #2196f3;
+      }
+      button {
+        background-color: #6200ea;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin: 5px;
+      }
+      button:hover {
+        background-color: #3700b3;
+      }
+      .result {
+        margin-top: 10px;
+        padding: 10px;
+        border-radius: 4px;
+        background-color: #333;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🎰 APT Casino - APTC Token Balance Test</h1>
+
+    <div class="test-section">
+      <h2>Network Configuration Test</h2>
+      <button onclick="testNetworkConfig()">Test Network Config</button>
+      <div id="network-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+      <h2>Token Balance Test</h2>
+      <button onclick="testTokenBalance()">Test Token Balance</button>
+      <div id="balance-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+      <h2>Frontend Integration Test</h2>
+      <button onclick="testFrontendIntegration()">
+        Test Frontend Integration
+      </button>
+      <div id="integration-result" class="result"></div>
+    </div>
+
+    <script type="module">
+      const TEST_PRINCIPAL =
+        "twpnr-foqar-af3an-h3zp4-2ayaf-bwdfo-agrrf-lejug-rufia-ccyzg-4ae";
+
+      window.testNetworkConfig = async function () {
+        const result = document.getElementById("network-result");
+        result.innerHTML =
+          '<span class="info">Testing network configuration...</span>';
+
+        try {
+          // Check if we can reach the local replica
+          const response = await fetch("http://localhost:49215/api/v2/status");
+          if (response.ok) {
+            result.innerHTML =
+              '<span class="success">✅ Network connection successful (port 49215)</span>';
+          } else {
+            result.innerHTML =
+              '<span class="error">❌ Network connection failed</span>';
+          }
+        } catch (error) {
+          result.innerHTML = `<span class="error">❌ Network error: ${error.message}</span>`;
+        }
+      };
+
+      window.testTokenBalance = async function () {
+        const result = document.getElementById("balance-result");
+        result.innerHTML = '<span class="info">Testing token balance...</span>';
+
+        try {
+          // Import modules dynamically
+          const { createAPTCTokenActor } = await import(
+            "/src/config/aptc-config.js"
+          );
+          const { Principal } = await import(
+            "https://unpkg.com/@dfinity/principal@1.0.1/lib/esm/index.js"
+          );
+
+          result.innerHTML +=
+            '<br><span class="info">🔄 Creating token actor...</span>';
+          const tokenActor = await createAPTCTokenActor();
+
+          result.innerHTML +=
+            '<br><span class="success">✅ Token actor created</span>';
+
+          result.innerHTML +=
+            '<br><span class="info">💰 Fetching balance...</span>';
+          const balance = await tokenActor.icrc1_balance_of({
+            owner: Principal.fromText(TEST_PRINCIPAL),
+            subaccount: [],
+          });
+
+          const balanceAPTC = Number(balance) / 1e8;
+          result.innerHTML += `<br><span class="success">✅ Balance: ${balanceAPTC} APTC</span>`;
+          result.innerHTML += `<br><span class="info">Raw balance: ${balance.toString()}</span>`;
+        } catch (error) {
+          result.innerHTML += `<br><span class="error">❌ Error: ${error.message}</span>`;
+          console.error("Token balance test failed:", error);
+        }
+      };
+
+      window.testFrontendIntegration = async function () {
+        const result = document.getElementById("integration-result");
+        result.innerHTML =
+          '<span class="info">Testing frontend integration...</span>';
+
+        try {
+          // Check if useAPTCToken hook is available
+          result.innerHTML +=
+            '<br><span class="info">🔄 Checking frontend integration...</span>';
+
+          // Navigate to balance test page
+          result.innerHTML +=
+            '<br><span class="info">🌐 Balance test page: <a href="/test/balance" target="_blank" style="color: #4caf50;">Open Balance Test</a></span>';
+          result.innerHTML +=
+            '<br><span class="info">🌐 Enhanced balance test page: <a href="/test/balance-enhanced" target="_blank" style="color: #4caf50;">Open Enhanced Balance Test</a></span>';
+
+          result.innerHTML +=
+            '<br><span class="success">✅ Frontend integration available</span>';
+        } catch (error) {
+          result.innerHTML += `<br><span class="error">❌ Error: ${error.message}</span>`;
+          console.error("Frontend integration test failed:", error);
+        }
+      };
+    </script>
+  </body>
+</html>

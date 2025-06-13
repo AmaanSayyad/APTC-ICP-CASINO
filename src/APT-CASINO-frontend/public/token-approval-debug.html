@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Token Approval Debug Tool</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #121212;
+        color: #ffffff;
+        line-height: 1.6;
+      }
+      h1,
+      h2 {
+        color: #bb86fc;
+        border-bottom: 1px solid #444;
+        padding-bottom: 10px;
+      }
+      .card {
+        background-color: #1e1e1e;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+      button {
+        background-color: #bb86fc;
+        color: #000;
+        border: none;
+        padding: 10px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        margin-right: 10px;
+        margin-bottom: 10px;
+      }
+      button:hover {
+        background-color: #9969da;
+      }
+      input,
+      select {
+        background-color: #333;
+        color: #fff;
+        border: 1px solid #555;
+        padding: 8px 12px;
+        border-radius: 4px;
+        margin-bottom: 10px;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      label {
+        display: block;
+        margin-bottom: 5px;
+        color: #bb86fc;
+      }
+      .code {
+        background-color: #2d2d2d;
+        padding: 15px;
+        border-radius: 4px;
+        overflow-x: auto;
+        font-family: monospace;
+        margin: 10px 0;
+      }
+      .results {
+        background-color: #2d2d2d;
+        padding: 15px;
+        border-radius: 4px;
+        overflow-x: auto;
+        margin: 10px 0;
+        max-height: 300px;
+        overflow-y: auto;
+      }
+      .success {
+        color: #4caf50;
+      }
+      .error {
+        color: #f44336;
+      }
+      .warning {
+        color: #ff9800;
+      }
+      .section {
+        margin-bottom: 30px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Token Approval Debug Tool</h1>
+
+    <div class="card">
+      <h2>Connection Status</h2>
+      <div id="connection-status">Checking connection...</div>
+      <button id="connect-wallet">Connect Wallet</button>
+      <button id="disconnect-wallet">Disconnect Wallet</button>
+      <button id="clear-cache">Clear Delegation Cache</button>
+    </div>
+
+    <div class="card">
+      <h2>Token Approval Test</h2>
+
+      <div class="section">
+        <label for="spender-canister">Spender Canister:</label>
+        <select id="spender-canister">
+          <option value="bw4dl-smaaa-aaaaa-qaacq-cai">
+            Roulette Game (bw4dl-smaaa-aaaaa-qaacq-cai)
+          </option>
+          <option value="be2us-64aaa-aaaaa-qaabq-cai">
+            Mines Game (be2us-64aaa-aaaaa-qaabq-cai)
+          </option>
+          <option value="custom">Custom Canister ID</option>
+        </select>
+
+        <div id="custom-canister-container" style="display: none">
+          <label for="custom-canister">Custom Canister ID:</label>
+          <input
+            type="text"
+            id="custom-canister"
+            placeholder="Enter canister ID"
+          />
+        </div>
+      </div>
+
+      <div class="section">
+        <label for="approval-amount">Amount to Approve:</label>
+        <input
+          type="number"
+          id="approval-amount"
+          value="100"
+          min="1"
+          step="1"
+        />
+        <small>APTC tokens</small>
+      </div>
+
+      <div class="section">
+        <button id="check-balance">Check Balance</button>
+        <button id="check-allowance">Check Allowance</button>
+        <button id="approve-tokens">Approve Tokens</button>
+      </div>
+
+      <div class="results" id="approval-results">
+        Results will appear here...
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Advanced Troubleshooting</h2>
+      <button id="validate-agent">Validate Agent</button>
+      <button id="refresh-agent">Refresh Agent</button>
+      <button id="complete-reset">Complete Wallet Reset</button>
+
+      <div class="results" id="troubleshooting-results">
+        Advanced results will appear here...
+      </div>
+    </div>
+
+    <script>
+      // This will be loaded from your app's backend integration
+      async function loadModules() {
+        try {
+          // Wait for the main app to load and expose these objects
+          let checkInterval = setInterval(() => {
+            if (
+              window.backendIntegration &&
+              window.backendIntegration.approveTokens &&
+              window.Principal
+            ) {
+              clearInterval(checkInterval);
+              initializeApp();
+            }
+          }, 500);
+
+          // Timeout after 10 seconds
+          setTimeout(() => {
+            clearInterval(checkInterval);
+            document.getElementById("connection-status").innerHTML =
+              '<span class="error">Failed to load required modules. Please open this page from the main app.</span>';
+          }, 10000);
+        } catch (error) {
+          console.error("Failed to load modules:", error);
+          document.getElementById(
+            "connection-status"
+          ).innerHTML = `<span class="error">Error: ${error.message}</span>`;
+        }
+      }
+
+      function initializeApp() {
+        const {
+          approveTokens,
+          principal,
+          balance,
+          formatBalance,
+          tokenInfo,
+          isConnected,
+          clearDelegationCache,
+          resetWalletConnection,
+        } = window.backendIntegration;
+
+        const Principal = window.Principal;
+
+        // Update connection status
+        function updateConnectionStatus() {
+          const statusElement = document.getElementById("connection-status");
+
+          if (isConnected && principal) {
+            statusElement.innerHTML = `
+                        <span class="success">✓ Connected</span>
+                        <div>Principal: ${principal}</div>
+                        <div>Balance: ${formatBalance(balance)} ${
+              tokenInfo.symbol
+            }</div>
+                    `;
+          } else {
+            statusElement.innerHTML =
+              '<span class="error">✗ Not connected</span>';
+          }
+        }
+
+        updateConnectionStatus();
+
+        // Setup event handlers
+        document
+          .getElementById("connect-wallet")
+          .addEventListener("click", async () => {
+            try {
+              // This should trigger the wallet connection flow in your app
+              if (window.connectWallet) {
+                await window.connectWallet();
+              } else {
+                throw new Error("Connect wallet function not available");
+              }
+              updateConnectionStatus();
+            } catch (error) {
+              console.error("Failed to connect wallet:", error);
+              document.getElementById(
+                "approval-results"
+              ).innerHTML = `<span class="error">Connect error: ${error.message}</span>`;
+            }
+          });
+
+        document
+          .getElementById("disconnect-wallet")
+          .addEventListener("click", async () => {
+            try {
+              if (window.disconnectWallet) {
+                await window.disconnectWallet();
+              } else {
+                throw new Error("Disconnect wallet function not available");
+              }
+              updateConnectionStatus();
+            } catch (error) {
+              console.error("Failed to disconnect wallet:", error);
+              document.getElementById(
+                "approval-results"
+              ).innerHTML = `<span class="error">Disconnect error: ${error.message}</span>`;
+            }
+          });
+
+        document
+          .getElementById("clear-cache")
+          .addEventListener("click", async () => {
+            try {
+              const result = await clearDelegationCache();
+              document.getElementById(
+                "approval-results"
+              ).innerHTML = `<span class="success">Cache cleared: ${result}</span>`;
+            } catch (error) {
+              console.error("Failed to clear cache:", error);
+              document.getElementById(
+                "approval-results"
+              ).innerHTML = `<span class="error">Clear cache error: ${error.message}</span>`;
+            }
+          });
+
+        // Handle spender canister selection
+        document
+          .getElementById("spender-canister")
+          .addEventListener("change", (e) => {
+            const customContainer = document.getElementById(
+              "custom-canister-container"
+            );
+            customContainer.style.display =
+              e.target.value === "custom" ? "block" : "none";
+          });
+
+        // Check balance
+        document
+          .getElementById("check-balance")
+          .addEventListener("click", async () => {
+            try {
+              if (!isConnected || !principal) {
+                throw new Error("Not connected");
+              }
+
+              document.getElementById(
+                "approval-results"
+              ).innerHTML = `<div>Checking balance...</div>`;
+
+              // Refresh balance using your app's mechanism
+              if (window.backendIntegration.fetchBalance) {
+                await window.backendIntegration.fetchBalance();
+              }
+
+              document.getElementById(
+                "approval-results"
+              ).innerHTML = `<div class="success">Current balance: ${formatBalance(
+                balance
+              )} ${tokenInfo.symbol}</div>`;
+
+              updateConnectionStatus();
+            } catch (error) {
+              console.error("Failed to check balance:", error);
+              document.getElementById(
+                "approval-results"
+              ).innerHTML = `<span class="error">Balance check error: ${error.message}</span>`;
+            }
+          });
+
+        // Check allowance
+        document
+          .getElementById("check-allowance")
+          .addEventListener("click", async () => {
+            try {
+              if (!isConnected || !principal) {
+                throw new Error("Not connected");
+              }
+
+              const spenderSelect = document.getElementById("spender-canister");
+              let spender = spenderSelect.value;
+
+              if (spender === "custom") {
+                spender = document.getElementById("custom-canister").value;
+                if (!spender) {
+                  throw new Error("Please enter a custom canister ID");
+                }
+              }
+
+              document.getElementById(
+                "approval-results"
+              ).innerHTML = `<div>Checking allowance for ${spender}...</div>`;
+
+              // Create a fresh agent
+              const { createAuthenticatedActors } = window.backendIntegration;
+              const { authAptcActor } = await createAuthenticatedActors();
+
+              const allowanceArgs = {
+                account: {
+                  owner: Principal.fromText(principal),
+                  subaccount: [],
+                },
+                spender: {
+                  owner: Principal.fromText(spender),
+                  subaccount: [],
+                },
+              };
+
+              const allowance = await authAptcActor.icrc2_allowance(
+                allowanceArgs
+              );
+
+              let resultHTML = "";
+              if ("Ok" in allowance) {
+                const amount = allowance.Ok.allowance;
+                resultHTML = `
+                            <div class="success">Current allowance for ${spender}: 
+                                ${formatBalance(amount)} ${tokenInfo.symbol}
+                            </div>
+                        `;
+              } else {
+                resultHTML = `
+                            <div class="error">Failed to get allowance: ${JSON.stringify(
+                              allowance.Err
+                            )}</div>
+                        `;
+              }
+
+              document.getElementById("approval-results").innerHTML =
+                resultHTML;
+            } catch (error) {
+              console.error("Failed to check allowance:", error);
+              document.getElementById(
+                "approval-results"
+              ).innerHTML = `<span class="error">Allowance check error: ${error.message}</span>`;
+            }
+          });
+
+        // Approve tokens
+        document
+          .getElementById("approve-tokens")
+          .addEventListener("click", async () => {
+            try {
+              if (!isConnected || !principal) {
+                throw new Error("Not connected");
+              }
+
+              const spenderSelect = document.getElementById("spender-canister");
+              let spender = spenderSelect.value;
+
+              if (spender === "custom") {
+                spender = document.getElementById("custom-canister").value;
+                if (!spender) {
+                  throw new Error("Please enter a custom canister ID");
+                }
+              }
+
+              const amount = parseFloat(
+                document.getElementById("approval-amount").value
+              );
+              if (isNaN(amount) || amount <= 0) {
+                throw new Error("Please enter a valid amount");
+              }
+
+              document.getElementById(
+                "approval-results"
+              ).innerHTML = `<div>Approving ${amount} ${tokenInfo.symbol} for ${spender}...</div>`;
+
+              // Call the approve function
+              const result = await approveTokens(spender, amount);
+
+              let resultHTML = "";
+              if ("Err" in result) {
+                resultHTML = `
+                            <div class="error">Approval failed: ${JSON.stringify(
+                              result.Err
+                            )}</div>
+                        `;
+              } else {
+                resultHTML = `
+                            <div class="success">
+                                ✓ Approval successful with ID: ${result}
+                                <div>Approved ${amount} ${tokenInfo.symbol} for ${spender}</div>
+                            </div>
+                        `;
+              }
+
+              document.getElementById("approval-results").innerHTML =
+                resultHTML;
+            } catch (error) {
+              console.error("Failed to approve tokens:", error);
+              document.getElementById(
+                "approval-results"
+              ).innerHTML = `<span class="error">Approval error: ${error.message}</span>`;
+            }
+          });
+
+        // Advanced troubleshooting
+        document
+          .getElementById("validate-agent")
+          .addEventListener("click", async () => {
+            try {
+              if (!isConnected || !principal) {
+                throw new Error("Not connected");
+              }
+
+              document.getElementById(
+                "troubleshooting-results"
+              ).innerHTML = `<div>Validating agent...</div>`;
+
+              // Get the current agent
+              const { getCachedAgent } = window.backendIntegration;
+              const agent = await getCachedAgent(
+                window.backendIntegration.identity,
+                `validation-${Date.now()}`,
+                true
+              );
+
+              // Check certificate
+              const hasCertificate =
+                agent._certificationInfo &&
+                agent._certificationInfo.certificate;
+              const now = Date.now();
+              const expirationTime = agent._certificationInfo
+                ? agent._certificationInfo.expirationTime
+                : null;
+              const isExpired = expirationTime && expirationTime < now;
+
+              let resultHTML = `
+                        <div class="${hasCertificate ? "success" : "error"}">
+                            Certificate: ${
+                              hasCertificate ? "Present" : "Missing"
+                            }
+                        </div>
+                    `;
+
+              if (expirationTime) {
+                resultHTML += `
+                            <div class="${isExpired ? "error" : "success"}">
+                                Expiration: ${new Date(
+                                  expirationTime
+                                ).toLocaleString()}
+                                ${isExpired ? " (EXPIRED)" : " (Valid)"}
+                            </div>
+                        `;
+              }
+
+              // Test status call
+              try {
+                const status = await agent.status();
+                resultHTML += `
+                            <div class="success">
+                                Status call: Successful
+                            </div>
+                        `;
+              } catch (e) {
+                resultHTML += `
+                            <div class="error">
+                                Status call: Failed - ${e.message}
+                            </div>
+                        `;
+              }
+
+              document.getElementById("troubleshooting-results").innerHTML =
+                resultHTML;
+            } catch (error) {
+              console.error("Agent validation failed:", error);
+              document.getElementById(
+                "troubleshooting-results"
+              ).innerHTML = `<span class="error">Validation error: ${error.message}</span>`;
+            }
+          });
+
+        // Refresh agent
+        document
+          .getElementById("refresh-agent")
+          .addEventListener("click", async () => {
+            try {
+              if (!isConnected || !principal) {
+                throw new Error("Not connected");
+              }
+
+              document.getElementById(
+                "troubleshooting-results"
+              ).innerHTML = `<div>Refreshing agent...</div>`;
+
+              // Force refresh the agent
+              const { getCachedAgent } = window.backendIntegration;
+              const agent = await getCachedAgent(
+                window.backendIntegration.identity,
+                `refresh-${Date.now()}`,
+                true
+              );
+
+              // For local development, fetch root key
+              if (
+                window.location.hostname.includes("localhost") ||
+                window.location.hostname.includes("127.0.0.1")
+              ) {
+                try {
+                  await agent.fetchRootKey();
+                } catch (e) {
+                  throw new Error(`Root key fetch failed: ${e.message}`);
+                }
+              }
+
+              document.getElementById(
+                "troubleshooting-results"
+              ).innerHTML = `<span class="success">Agent refreshed successfully</span>`;
+            } catch (error) {
+              console.error("Agent refresh failed:", error);
+              document.getElementById(
+                "troubleshooting-results"
+              ).innerHTML = `<span class="error">Refresh error: ${error.message}</span>`;
+            }
+          });
+
+        // Complete wallet reset
+        document
+          .getElementById("complete-reset")
+          .addEventListener("click", async () => {
+            try {
+              document.getElementById(
+                "troubleshooting-results"
+              ).innerHTML = `<div>Performing complete wallet reset...</div>`;
+
+              const result = await resetWalletConnection();
+
+              document.getElementById(
+                "troubleshooting-results"
+              ).innerHTML = `<span class="success">Wallet reset: ${result}</span>
+                        <div>Please disconnect and reconnect your wallet</div>`;
+            } catch (error) {
+              console.error("Wallet reset failed:", error);
+              document.getElementById(
+                "troubleshooting-results"
+              ).innerHTML = `<span class="error">Reset error: ${error.message}</span>`;
+            }
+          });
+      }
+
+      // Start loading modules
+      document.addEventListener("DOMContentLoaded", loadModules);
+    </script>
+  </body>
+</html>

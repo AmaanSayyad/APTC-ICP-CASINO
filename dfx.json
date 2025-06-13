@@ -1,0 +1,42 @@
+{
+  "canisters": {
+    "roulette-game": {
+      "main": "src/APT-CASINO-backend/roulette.mo",
+      "type": "motoko"
+    },
+    "mines-game": {
+      "main": "src/APT-CASINO-backend/mines.mo",
+      "type": "motoko"
+    },
+    "APT-CASINO-frontend": {
+      "dependencies": ["roulette-game"],
+      "source": ["src/APT-CASINO-frontend/dist"],
+      "type": "assets",
+      "workspace": "APT-CASINO-frontend"
+    },
+    "APTC-token": {
+      "type": "custom",
+      "candid": "https://raw.githubusercontent.com/dfinity/ic/d87954601e4b22972899e9957e800406a0a6b929/rs/rosetta-api/icp_ledger/ledger.did",
+      "wasm": "https://download.dfinity.systems/ic/d87954601e4b22972899e9957e800406a0a6b929/canisters/ledger-canister.wasm.gz"
+    },
+    "internet_identity": {
+      "type": "custom",
+      "candid": "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity.did",
+      "wasm": "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity_dev.wasm.gz",
+      "shrink": false,
+      "remote": {
+        "id": {
+          "ic": "bw4dl-smaaa-aaaaa-qaacq-cai"
+        }
+      }
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  },
+  "output_env_file": ".env",
+  "version": 1
+}

@@ -1,0 +1,96 @@
+export const manualFormConfig = {
+  fields: [
+    {
+      id: "betAmount",
+      label: "Bet Amount (APTC)",
+      type: "singleSelect",
+      options: [10, 25, 50, 100, 250, 500, 1000],
+      defaultValue: 50,
+      placeholder: "Select bet amount",
+    },
+    {
+      id: "betType",
+      label: "Bet Type",
+      type: "singleSelect",
+      options: ["Red", "Black", "Even", "Odd", "High", "Low", "Number"],
+      defaultValue: "Red",
+      placeholder: "Select bet type",
+    },
+    {
+      id: "number",
+      label: "Number (if applicable)",
+      type: "singleSelect",
+      options: Array.from({ length: 37 }, (_, i) => i),
+      defaultValue: 0,
+      placeholder: "Select number (0-36)",
+    },
+  ],
+  submitButton: "PLACE BET",
+};
+
+export const autoFormConfig = {
+  submitButton: "START AUTO BETTING",
+  fields: [
+    {
+      id: "betAmount",
+      label: "Bet Amount (APTC)",
+      type: "singleSelect",
+      options: [10, 25, 50, 100, 250, 500, 1000],
+      defaultValue: 50,
+      placeholder: "Select bet amount",
+    },
+    {
+      id: "betType",
+      label: "Bet Type",
+      type: "singleSelect",
+      options: ["Red", "Black", "Even", "Odd", "High", "Low", "Number"],
+      defaultValue: "Red",
+      placeholder: "Select bet type",
+    },
+    {
+      id: "number",
+      label: "Number (if applicable)",
+      type: "singleSelect",
+      options: Array.from({ length: 37 }, (_, i) => i),
+      defaultValue: 0,
+      placeholder: "Select number (0-36)",
+    },
+    {
+      id: "numberOfBets",
+      label: "Number of Spins",
+      type: "number",
+      defaultValue: 10,
+      placeholder: "Total spins to play",
+    },
+    {
+      id: "onWin",
+      label: "On Win Action",
+      type: "singleSelect",
+      options: ["Reset", "+10%", "+25%", "+50%", "+100%", "-10%", "-25%"],
+      defaultValue: "Reset",
+      placeholder: "Strategy after winning",
+    },
+    {
+      id: "onLoss",
+      label: "On Loss Action",
+      type: "singleSelect",
+      options: ["Reset", "+10%", "+25%", "+50%", "+100%", "-10%", "-25%"],
+      defaultValue: "+50%",
+      placeholder: "Strategy after losing",
+    },
+    {
+      id: "stopOnProfit",
+      label: "Stop on Profit (APTC)",
+      type: "text",
+      defaultValue: "1000",
+      placeholder: "Auto-stop at this profit",
+    },
+    {
+      id: "stopOnLoss",
+      label: "Stop on Loss (APTC)",
+      type: "text",
+      defaultValue: "1000",
+      placeholder: "Auto-stop at this loss",
+    },
+  ],
+};

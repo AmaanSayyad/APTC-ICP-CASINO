@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="theme-color" content="#000000" />
+    <meta
+      name="description"
+      content="APT Casino - Decentralized Gaming Platform"
+    />
+    <!-- ULTRA PERMISSIVE CSP FOR LOCAL DEVELOPMENT - DISABLE ALL RESTRICTIONS -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src *; connect-src *; script-src * 'unsafe-inline' 'unsafe-eval'; style-src * 'unsafe-inline'; img-src * data: blob:; font-src * data:; object-src *; media-src *; frame-src *; worker-src * blob:; child-src *; form-action *; base-uri *;"
+    />
+    <title>APT Casino</title>
+    <base href="/" />
+    <link rel="icon" href="/favicon.ico" />
+  </head>
+
+  <body>
+    <noscript>
+      <div
+        style="text-align: center; padding: 50px; color: #fff; background: #000"
+      >
+        ⚠️ JavaScript is required to run this application. Please enable
+        JavaScript in your browser.
+      </div>
+    </noscript>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

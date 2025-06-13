@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>APT-CASINO Token Approval Test</title>
+    <style>
+      body {
+        font-family: "Arial", sans-serif;
+        background-color: #0f0f1a;
+        color: #e0e0e0;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      h1,
+      h2 {
+        color: #ffd700;
+        text-align: center;
+      }
+      .card {
+        background-color: #1a1a2e;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        border: 1px solid #333366;
+      }
+      button {
+        background-color: #4c43cd;
+        color: white;
+        border: none;
+        padding: 10px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        display: block;
+        margin: 10px auto;
+        min-width: 200px;
+      }
+      button:hover {
+        background-color: #5e54e6;
+      }
+      button:disabled {
+        background-color: #444;
+        cursor: not-allowed;
+      }
+      .log-container {
+        background-color: #111122;
+        border-radius: 4px;
+        padding: 10px;
+        max-height: 300px;
+        overflow-y: auto;
+        font-family: monospace;
+        font-size: 14px;
+        margin-top: 20px;
+        border: 1px solid #2d2d4f;
+      }
+      .log-entry {
+        margin: 5px 0;
+        border-bottom: 1px solid #2d2d4f;
+        padding-bottom: 5px;
+      }
+      .success {
+        color: #4caf50;
+      }
+      .warning {
+        color: #ff9800;
+      }
+      .error {
+        color: #f44336;
+      }
+      .info {
+        color: #2196f3;
+      }
+      .status-indicator {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 5px;
+      }
+      .status-connected {
+        background-color: #4caf50;
+      }
+      .status-disconnected {
+        background-color: #f44336;
+      }
+      .steps {
+        list-style-type: none;
+        padding: 0;
+      }
+      .steps li {
+        margin-bottom: 10px;
+        display: flex;
+        align-items: flex-start;
+      }
+      .step-number {
+        background-color: #ffd700;
+        color: #000;
+        width: 25px;
+        height: 25px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 10px;
+        flex-shrink: 0;
+      }
+      .step-content {
+        flex: 1;
+      }
+      .hidden {
+        display: none;
+      }
+      .loader {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #3498db;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        animation: spin 2s linear infinite;
+        display: inline-block;
+        margin-right: 10px;
+      }
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>APT-CASINO Token Approval Test</h1>
+    <p>
+      This tool helps you test and troubleshoot token approval issues with the
+      APTC token.
+    </p>
+
+    <div class="card">
+      <h2>Connection Status</h2>
+      <div id="connection-status">
+        <div class="status-indicator status-disconnected"></div>
+        Disconnected
+      </div>
+      <div>
+        <p>Principal ID: <span id="principal-id">Not connected</span></p>
+        <p>APTC Balance: <span id="aptc-balance">Unknown</span></p>
+      </div>
+      <button id="connect-wallet">Connect Wallet</button>
+      <button id="disconnect-wallet" disabled>Disconnect Wallet</button>
+    </div>
+
+    <div class="card">
+      <h2>Token Approval Test</h2>
+      <p>
+        Test the token approval flow to verify the fix is working correctly.
+      </p>
+      <div>
+        <label for="approval-amount">Approval Amount (APTC):</label>
+        <input
+          type="number"
+          id="approval-amount"
+          value="10"
+          min="1"
+          max="1000"
+          step="1"
+        />
+      </div>
+      <button id="test-approval" disabled>Test Token Approval</button>
+      <div id="test-results" class="hidden">
+        <h3>Test Results</h3>
+        <div id="test-status"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Troubleshooting Steps</h2>
+      <p>If you encounter issues with token approval, follow these steps:</p>
+      <ol class="steps">
+        <li>
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <strong>Clear browser cache</strong>
+            <p>
+              Open developer tools (F12) > Application > Storage > Local Storage
+              and clear items containing 'delegation', 'identity', or
+              'principal'.
+            </p>
+          </div>
+        </li>
+        <li>
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <strong>Run the fix script</strong>
+            <p>
+              Execute <code>./fix-canister-signatures.sh</code> in your terminal
+              to clean up delegations and certificates.
+            </p>
+          </div>
+        </li>
+        <li>
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <strong>Restart the local replica</strong>
+            <p>
+              Run <code>dfx stop && dfx start --clean --background</code> to
+              restart with a clean state.
+            </p>
+          </div>
+        </li>
+        <li>
+          <div class="step-number">4</div>
+          <div class="step-content">
+            <strong>Reconnect your wallet</strong>
+            <p>
+              Click the Disconnect button and then Connect again to establish a
+              fresh connection.
+            </p>
+          </div>
+        </li>
+      </ol>
+      <button id="clear-cache">Clear Local Storage Cache</button>
+    </div>
+
+    <div class="card">
+      <h2>Logs</h2>
+      <button id="clear-logs">Clear Logs</button>
+      <div id="logs" class="log-container"></div>
+    </div>
+
+    <script type="module">
+      // Import necessary libraries for Internet Computer
+      import { AuthClient } from "https://cdn.jsdelivr.net/npm/@dfinity/auth-client@0.15.0/+esm";
+      import {
+        Actor,
+        HttpAgent,
+      } from "https://cdn.jsdelivr.net/npm/@dfinity/agent@0.15.0/+esm";
+      import { Principal } from "https://cdn.jsdelivr.net/npm/@dfinity/principal@0.15.0/+esm";
+
+      // Token canister ID
+      const APTC_TOKEN_CANISTER_ID = "be2us-64aaa-aaaaa-qaabq-cai"; // Local canister ID - adjust as needed
+      const ROULETTE_GAME_CANISTER_ID = "be2us-64aaa-aaaaa-qaabq-cai"; // Local canister ID - adjust as needed
+
+      // Elements
+      const connectButton = document.getElementById("connect-wallet");
+      const disconnectButton = document.getElementById("disconnect-wallet");
+      const connectionStatus = document.getElementById("connection-status");
+      const principalId = document.getElementById("principal-id");
+      const aptcBalance = document.getElementById("aptc-balance");
+      const testApprovalButton = document.getElementById("test-approval");
+      const approvalAmount = document.getElementById("approval-amount");
+      const testResults = document.getElementById("test-results");
+      const testStatus = document.getElementById("test-status");
+      const logs = document.getElementById("logs");
+      const clearLogsButton = document.getElementById("clear-logs");
+      const clearCacheButton = document.getElementById("clear-cache");
+
+      // State
+      let authClient = null;
+      let identity = null;
+      let agent = null;
+      let tokenActor = null;
+
+      // Log levels
+      const LOG_LEVEL = {
+        INFO: "info",
+        SUCCESS: "success",
+        WARNING: "warning",
+        ERROR: "error",
+      };
+
+      // Functions
+      function addLog(message, level = LOG_LEVEL.INFO) {
+        const logEntry = document.createElement("div");
+        logEntry.className = `log-entry ${level}`;
+        logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+        logs.appendChild(logEntry);
+        logs.scrollTop = logs.scrollHeight;
+      }
+
+      async function connect() {
+        try {
+          addLog("Initializing auth client...", LOG_LEVEL.INFO);
+          authClient = await AuthClient.create();
+
+          addLog("Checking if already authenticated...", LOG_LEVEL.INFO);
+          if (await authClient.isAuthenticated()) {
+            handleAuthenticated();
+            return;
+          }
+
+          addLog("Opening identity provider login...", LOG_LEVEL.INFO);
+          await authClient.login({
+            identityProvider: `http://${window.location.hostname}:4943?canisterId=rdmx6-jaaaa-aaaaa-aaadq-cai`,
+            onSuccess: () => {
+              handleAuthenticated();
+            },
+            onError: (error) => {
+              addLog(`Authentication error: ${error}`, LOG_LEVEL.ERROR);
+            },
+          });
+        } catch (error) {
+          addLog(`Connection error: ${error.message}`, LOG_LEVEL.ERROR);
+        }
+      }
+
+      async function handleAuthenticated() {
+        addLog("Authentication successful", LOG_LEVEL.SUCCESS);
+        identity = authClient.getIdentity();
+
+        // Create agent
+        agent = new HttpAgent({
+          host: `http://${window.location.hostname}:4943`,
+          identity: identity,
+          disableOriginalPrincipalValidation: true,
+        });
+
+        // Fetch root key for local development
+        await agent.fetchRootKey().catch((e) => {
+          addLog(`Root key fetch warning: ${e.message}`, LOG_LEVEL.WARNING);
+        });
+
+        // Create token actor
+        tokenActor = await createTokenActor();
+
+        // Update UI
+        updateConnectionStatus(true);
+        await fetchAndDisplayBalance();
+
+        addLog("Ready to test token approval", LOG_LEVEL.INFO);
+      }
+
+      async function createTokenActor() {
+        // Define ICRC token interface
+        const icrcTokenIDL = ({ IDL }) => {
+          const Subaccount = IDL.Vec(IDL.Nat8);
+          const Account = IDL.Record({
+            owner: IDL.Principal,
+            subaccount: IDL.Opt(Subaccount),
+          });
+
+          return IDL.Service({
+            icrc1_name: IDL.Func([], [IDL.Text], ["query"]),
+            icrc1_symbol: IDL.Func([], [IDL.Text], ["query"]),
+            icrc1_decimals: IDL.Func([], [IDL.Nat8], ["query"]),
+            icrc1_fee: IDL.Func([], [IDL.Nat], ["query"]),
+            icrc1_metadata: IDL.Func(
+              [],
+              [
+                IDL.Vec(
+                  IDL.Tuple(
+                    IDL.Text,
+                    IDL.Variant({
+                      Nat: IDL.Nat,
+                      Int: IDL.Int,
+                      Text: IDL.Text,
+                      Blob: IDL.Vec(IDL.Nat8),
+                    })
+                  )
+                ),
+              ],
+              ["query"]
+            ),
+            icrc1_balance_of: IDL.Func([Account], [IDL.Nat], ["query"]),
+            icrc2_approve: IDL.Func(
+              [
+                IDL.Record({
+                  from_subaccount: IDL.Opt(Subaccount),
+                  spender: Account,
+                  amount: IDL.Nat,
+                  expected_allowance: IDL.Opt(IDL.Nat),
+                  expires_at: IDL.Opt(IDL.Nat64),
+                  fee: IDL.Opt(IDL.Nat),
+                  memo: IDL.Opt(IDL.Vec(IDL.Nat8)),
+                  created_at_time: IDL.Opt(IDL.Nat64),
+                }),
+              ],
+              [
+                IDL.Variant({
+                  Ok: IDL.Nat,
+                  Err: IDL.Variant({
+                    GenericError: IDL.Record({
+                      message: IDL.Text,
+                      error_code: IDL.Nat,
+                    }),
+                    TemporarilyUnavailable: IDL.Null,
+                    InsufficientFunds: IDL.Record({ balance: IDL.Nat }),
+                    BadFee: IDL.Record({ expected_fee: IDL.Nat }),
+                    AllowanceChanged: IDL.Record({
+                      current_allowance: IDL.Nat,
+                    }),
+                    CreatedInFuture: IDL.Record({ ledger_time: IDL.Nat64 }),
+                    TooOld: IDL.Null,
+                    Expired: IDL.Record({
+                      ledger_time: IDL.Nat64,
+                      expires_at: IDL.Nat64,
+                    }),
+                  }),
+                }),
+              ],
+              []
+            ),
+            icrc2_allowance: IDL.Func(
+              [
+                IDL.Record({
+                  account: Account,
+                  spender: Account,
+                }),
+              ],
+              [
+                IDL.Record({
+                  allowance: IDL.Nat,
+                  expires_at: IDL.Opt(IDL.Nat64),
+                }),
+              ],
+              ["query"]
+            ),
+          });
+        };
+
+        // Create actor
+        addLog("Creating token actor...", LOG_LEVEL.INFO);
+        return Actor.createActor(icrcTokenIDL, {
+          agent,
+          canisterId: APTC_TOKEN_CANISTER_ID,
+        });
+      }
+
+      async function disconnect() {
+        try {
+          addLog("Logging out...", LOG_LEVEL.INFO);
+          await authClient.logout();
+          identity = null;
+          agent = null;
+          tokenActor = null;
+          updateConnectionStatus(false);
+          addLog("Logged out successfully", LOG_LEVEL.SUCCESS);
+        } catch (error) {
+          addLog(`Logout error: ${error.message}`, LOG_LEVEL.ERROR);
+        }
+      }
+
+      function updateConnectionStatus(isConnected) {
+        const statusIndicator =
+          connectionStatus.querySelector(".status-indicator");
+
+        if (isConnected) {
+          statusIndicator.className = "status-indicator status-connected";
+          connectionStatus.textContent = "";
+          connectionStatus.appendChild(statusIndicator);
+          connectionStatus.appendChild(document.createTextNode("Connected"));
+
+          principalId.textContent = identity.getPrincipal().toString();
+
+          connectButton.disabled = true;
+          disconnectButton.disabled = false;
+          testApprovalButton.disabled = false;
+        } else {
+          statusIndicator.className = "status-indicator status-disconnected";
+          connectionStatus.textContent = "";
+          connectionStatus.appendChild(statusIndicator);
+          connectionStatus.appendChild(document.createTextNode("Disconnected"));
+
+          principalId.textContent = "Not connected";
+          aptcBalance.textContent = "Unknown";
+
+          connectButton.disabled = false;
+          disconnectButton.disabled = true;
+          testApprovalButton.disabled = true;
+
+          testResults.classList.add("hidden");
+        }
+      }
+
+      async function fetchAndDisplayBalance() {
+        if (!tokenActor) {
+          addLog("Token actor not initialized", LOG_LEVEL.WARNING);
+          return;
+        }
+
+        try {
+          addLog("Fetching APTC balance...", LOG_LEVEL.INFO);
+          const balanceArgs = {
+            owner: identity.getPrincipal(),
+            subaccount: [],
+          };
+
+          const balance = await tokenActor.icrc1_balance_of(balanceArgs);
+          const decimals = await tokenActor.icrc1_decimals();
+
+          // Format the balance with proper decimals
+          const formattedBalance = Number(balance) / Math.pow(10, decimals);
+          aptcBalance.textContent = `${formattedBalance.toFixed(2)} APTC`;
+
+          addLog(
+            `Balance retrieved: ${formattedBalance.toFixed(2)} APTC`,
+            LOG_LEVEL.SUCCESS
+          );
+          return formattedBalance;
+        } catch (error) {
+          addLog(`Balance fetch error: ${error.message}`, LOG_LEVEL.ERROR);
+          aptcBalance.textContent = "Error";
+          return 0;
+        }
+      }
+
+      async function testTokenApproval() {
+        if (!tokenActor) {
+          addLog("Token actor not initialized", LOG_LEVEL.ERROR);
+          return;
+        }
+
+        testStatus.innerHTML =
+          '<div class="loader"></div> Testing token approval...';
+        testResults.classList.remove("hidden");
+
+        try {
+          // Step 1: Get token metadata
+          addLog("Fetching token metadata...", LOG_LEVEL.INFO);
+          const [metadata, fee, decimals] = await Promise.all([
+            tokenActor.icrc1_metadata(),
+            tokenActor.icrc1_fee(),
+            tokenActor.icrc1_decimals(),
+          ]);
+
+          // Format metadata for logging
+          const formattedMetadata = {};
+          metadata.forEach((item) => {
+            const key = item[0];
+            const valueObj = item[1];
+            const valueType = Object.keys(valueObj)[0];
+            formattedMetadata[key] = valueObj[valueType];
+          });
+
+          addLog(
+            `Token metadata retrieved: ${JSON.stringify(formattedMetadata)}`,
+            LOG_LEVEL.SUCCESS
+          );
+          addLog(`Token fee: ${fee}`, LOG_LEVEL.INFO);
+
+          // Step 2: Create approval transaction
+          const amount = approvalAmount.value;
+          const tokenAmount = BigInt(
+            Math.floor(Number(amount) * Math.pow(10, decimals))
+          );
+          const tokenFee = BigInt(fee);
+
+          addLog(
+            `Approval amount: ${amount} APTC (${tokenAmount} e${decimals})`,
+            LOG_LEVEL.INFO
+          );
+
+          // Create approval transaction
+          const transaction = {
+            from_subaccount: [],
+            spender: {
+              owner: Principal.fromText(ROULETTE_GAME_CANISTER_ID),
+              subaccount: [],
+            },
+            amount: tokenAmount + tokenFee, // Add fee to ensure sufficient approval
+            expected_allowance: [],
+            expires_at: [],
+            fee: [tokenFee],
+            memo: [],
+            created_at_time: [],
+          };
+
+          addLog(
+            `Approving tokens for roulette game canister: ${ROULETTE_GAME_CANISTER_ID}`,
+            LOG_LEVEL.INFO
+          );
+
+          // Step 3: Execute approval with retries
+          let result;
+          let attempts = 0;
+          const maxAttempts = 3;
+
+          while (attempts < maxAttempts) {
+            try {
+              addLog(
+                `Approval attempt ${attempts + 1}/${maxAttempts}...`,
+                LOG_LEVEL.INFO
+              );
+              result = await tokenActor.icrc2_approve(transaction);
+
+              if ("Err" in result) {
+                throw new Error(
+                  `Approval returned error: ${JSON.stringify(result.Err)}`
+                );
+              }
+
+              addLog(`Approval successful: ${result.Ok}`, LOG_LEVEL.SUCCESS);
+              break;
+            } catch (error) {
+              attempts++;
+              addLog(
+                `Approval attempt ${attempts} failed: ${error.message}`,
+                LOG_LEVEL.ERROR
+              );
+
+              if (attempts < maxAttempts) {
+                const delay = 1000 * Math.pow(2, attempts);
+                addLog(`Waiting ${delay}ms before retry...`, LOG_LEVEL.INFO);
+                await new Promise((resolve) => setTimeout(resolve, delay));
+
+                // Refresh root key for local development
+                try {
+                  await agent.fetchRootKey();
+                  addLog("Root key refreshed for retry", LOG_LEVEL.INFO);
+                } catch (e) {
+                  addLog(
+                    `Root key refresh failed: ${e.message}`,
+                    LOG_LEVEL.WARNING
+                  );
+                }
+              } else {
+                throw error;
+              }
+            }
+          }
+
+          // Step 4: Verify the allowance
+          addLog("Verifying allowance...", LOG_LEVEL.INFO);
+          const allowanceResult = await tokenActor.icrc2_allowance({
+            account: {
+              owner: identity.getPrincipal(),
+              subaccount: [],
+            },
+            spender: {
+              owner: Principal.fromText(ROULETTE_GAME_CANISTER_ID),
+              subaccount: [],
+            },
+          });
+
+          const allowanceAmount =
+            Number(allowanceResult.allowance) / Math.pow(10, decimals);
+          addLog(
+            `Current allowance: ${allowanceAmount} APTC`,
+            LOG_LEVEL.SUCCESS
+          );
+
+          // Update test status
+          testStatus.innerHTML = `
+                    <div class="success">✅ Token approval successful!</div>
+                    <p>Amount approved: ${amount} APTC</p>
+                    <p>Current allowance: ${allowanceAmount} APTC</p>
+                    <p>Spender: ${ROULETTE_GAME_CANISTER_ID} (Roulette Game)</p>
+                `;
+
+          // Refresh balance after approval
+          await fetchAndDisplayBalance();
+        } catch (error) {
+          addLog(
+            `Token approval test failed: ${error.message}`,
+            LOG_LEVEL.ERROR
+          );
+
+          // Check for certificate errors
+          const errorMessage = error.message || "";
+          const isCertificateError =
+            errorMessage.includes("ThresBls12_381") ||
+            errorMessage.includes("signature could not be verified") ||
+            errorMessage.includes("Certificate verification failed") ||
+            errorMessage.includes("delegation") ||
+            errorMessage.includes("Invalid canister signature");
+
+          if (isCertificateError) {
+            testStatus.innerHTML = `
+                        <div class="error">❌ Certificate Error Detected</div>
+                        <p>${error.message}</p>
+                        <p><strong>Recommended Actions:</strong></p>
+                        <ol>
+                            <li>Clear browser cache (use the button below)</li>
+                            <li>Run ./fix-canister-signatures.sh script</li>
+                            <li>Disconnect and reconnect your wallet</li>
+                        </ol>
+                        <button id="fix-certificate-issues">Fix Certificate Issues</button>
+                    `;
+
+            document
+              .getElementById("fix-certificate-issues")
+              .addEventListener("click", () => {
+                clearLocalStorage();
+                disconnect().then(() => {
+                  addLog(
+                    "Ready to reconnect after cache cleared",
+                    LOG_LEVEL.INFO
+                  );
+                });
+              });
+          } else {
+            testStatus.innerHTML = `
+                        <div class="error">❌ Token approval failed</div>
+                        <p>${error.message}</p>
+                    `;
+          }
+        }
+      }
+
+      function clearLocalStorage() {
+        addLog("Clearing local storage cache...", LOG_LEVEL.INFO);
+
+        // Find and clear delegation-related items
+        let itemsCleared = 0;
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (
+            key.includes("delegation") ||
+            key.includes("identity") ||
+            key.includes("principal") ||
+            key.includes("agent") ||
+            key.includes("auth")
+          ) {
+            addLog(`Removing item: ${key}`, LOG_LEVEL.INFO);
+            localStorage.removeItem(key);
+            itemsCleared++;
+            i--; // Adjust index since we removed an item
+          }
+        }
+
+        addLog(
+          `Cleared ${itemsCleared} items from local storage`,
+          LOG_LEVEL.SUCCESS
+        );
+      }
+
+      // Event listeners
+      connectButton.addEventListener("click", connect);
+      disconnectButton.addEventListener("click", disconnect);
+      testApprovalButton.addEventListener("click", testTokenApproval);
+      clearLogsButton.addEventListener("click", () => {
+        logs.innerHTML = "";
+        addLog("Logs cleared", LOG_LEVEL.INFO);
+      });
+      clearCacheButton.addEventListener("click", () => {
+        clearLocalStorage();
+      });
+
+      // Initialize
+      addLog("Token approval test tool initialized", LOG_LEVEL.INFO);
+      addLog("Connect your wallet to begin testing", LOG_LEVEL.INFO);
+    </script>
+  </body>
+</html>

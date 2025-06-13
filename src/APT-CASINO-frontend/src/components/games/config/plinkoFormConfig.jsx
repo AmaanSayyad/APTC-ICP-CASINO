@@ -1,0 +1,96 @@
+export const manualFormConfig = {
+  fields: [
+    {
+      id: "betAmount",
+      label: "Bet Amount (APTC)",
+      type: "singleSelect",
+      options: [10, 25, 50, 100, 250, 500],
+      defaultValue: 50,
+      placeholder: "Select bet amount",
+    },
+    {
+      id: "risk",
+      label: "Risk Level",
+      type: "singleSelect",
+      options: ["Low", "Medium", "High"],
+      defaultValue: "Medium",
+      placeholder: "Select Risk Level",
+    },
+    {
+      id: "rows",
+      label: "Number of Rows",
+      type: "singleSelect",
+      options: [8, 10, 12, 14, 16],
+      defaultValue: 12,
+      placeholder: "Select number of rows",
+    },
+  ],
+  submitButton: "DROP BALL",
+};
+
+export const autoFormConfig = {
+  submitButton: "START AUTO PLAY",
+  fields: [
+    {
+      id: "betAmount",
+      label: "Bet Amount (APTC)",
+      type: "singleSelect",
+      options: [10, 25, 50, 100, 250, 500],
+      defaultValue: 50,
+      placeholder: "Select bet amount",
+    },
+    {
+      id: "risk",
+      label: "Risk Level",
+      type: "singleSelect",
+      options: ["Low", "Medium", "High"],
+      defaultValue: "Medium",
+      placeholder: "Select Risk Level",
+    },
+    {
+      id: "rows",
+      label: "Number of Rows",
+      type: "singleSelect",
+      options: [8, 10, 12, 14, 16],
+      defaultValue: 12,
+      placeholder: "Select number of rows",
+    },
+    {
+      id: "numberOfBets",
+      label: "Number of Drops",
+      type: "number",
+      defaultValue: 10,
+      placeholder: "Total balls to drop",
+    },
+    {
+      id: "onWin",
+      label: "On Win Action",
+      type: "singleSelect",
+      options: ["Reset", "+10%", "+25%", "+50%", "+100%", "-10%", "-25%"],
+      defaultValue: "Reset",
+      placeholder: "Strategy after winning",
+    },
+    {
+      id: "onLoss",
+      label: "On Loss Action",
+      type: "singleSelect",
+      options: ["Reset", "+10%", "+25%", "+50%", "+100%", "-10%", "-25%"],
+      defaultValue: "+25%",
+      placeholder: "Strategy after losing",
+    },
+    {
+      id: "stopOnProfit",
+      label: "Stop on Profit (APTC)",
+      type: "text",
+      defaultValue: "500",
+      placeholder: "Auto-stop at this profit",
+    },
+    {
+      id: "stopOnLoss",
+      label: "Stop on Loss (APTC)",
+      type: "text",
+      defaultValue: "500",
+      placeholder: "Auto-stop at this loss",
+    },
+  ],
+};
