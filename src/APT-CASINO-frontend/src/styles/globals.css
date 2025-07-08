@@ -2,7 +2,6 @@
 @import "./fonts.css";
 @import "./shadows.css";
 @import "./components.css";
-@import "@nfid/identitykit/react/styles.css";
 
 @tailwind base;
 @tailwind components;
