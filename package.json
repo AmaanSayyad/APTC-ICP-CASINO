@@ -18,7 +18,7 @@
   "dependencies": {
     "@dfinity/agent": "^2.4.1",
     "@dfinity/identity": "^2.4.1",
-    "@esbuild/darwin-x64": "^0.18.20",
+    "@esbuild/darwin-arm64": "^0.18.20",
     "node-fetch": "^3.3.2"
   }
 }

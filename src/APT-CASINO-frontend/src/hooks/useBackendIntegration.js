@@ -1298,14 +1298,32 @@ const useBackendIntegration = () => {
           );
 
           const betAmountValue = parseAmount(betAmount);
+          console.log("💰 Parsed bet amount:", betAmountValue.toString());
 
           // Get the current fee from the token actor to ensure it's up-to-date
           const currentFee = await authAptcActor.icrc1_fee();
           const tokenFee =
             typeof currentFee === "bigint" ? currentFee : BigInt(currentFee);
+          console.log("💸 Current token fee:", tokenFee.toString());
 
           // Add the token fee to ensure sufficient approval
           const approvalAmount = betAmountValue + tokenFee;
+          console.log("🔐 Total approval amount:", approvalAmount.toString());
+
+          // Check current balance before approval
+          const currentBalance = await authAptcActor.icrc1_balance_of({
+            owner: identity.getPrincipal(),
+            subaccount: [],
+          });
+          console.log(
+            "💰 Current balance before approval:",
+            currentBalance.toString()
+          );
+          console.log("🧮 Balance vs approval check:", {
+            balance: currentBalance.toString(),
+            needed: approvalAmount.toString(),
+            sufficient: currentBalance >= approvalAmount,
+          });
 
           const approveArgs = {
             from_subaccount: [],
@@ -1322,16 +1340,70 @@ const useBackendIntegration = () => {
           };
 
           const approvalResult = await authAptcActor.icrc2_approve(approveArgs);
+          console.log(
+            "🔐 Approval result:",
+            JSON.stringify(approvalResult, (key, value) =>
+              typeof value === "bigint" ? value.toString() : value
+            )
+          );
+
           if ("Err" in approvalResult) {
             throw new Error(
               `Token approval failed: ${JSON.stringify(approvalResult.Err)}`
             );
           }
 
+          // Add a brief delay after approval to ensure backend sees the allowance
+          console.log(
+            "⏳ Brief delay after approval for backend synchronization..."
+          );
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+
+          // Verify the allowance was set correctly
+          const allowanceCheck = await authAptcActor.icrc2_allowance({
+            account: { owner: identity.getPrincipal(), subaccount: [] },
+            spender: {
+              owner: Principal.fromText(CANISTER_IDS.MINES_GAME),
+              subaccount: [],
+            },
+          });
+          console.log(
+            "🔍 Allowance verification:",
+            allowanceCheck.allowance.toString()
+          );
+
+          // Pre-flight check: ensure backend has current balance by calling getPlayerTokenBalance
+          console.log("🔄 Pre-flight balance check to sync backend state...");
+          try {
+            const backendBalanceCheck =
+              await authMinesActor.getPlayerTokenBalance(
+                identity.getPrincipal()
+              );
+            console.log(
+              "💰 Backend balance pre-flight:",
+              backendBalanceCheck.toString()
+            );
+          } catch (preflightError) {
+            console.warn("⚠️ Pre-flight balance check failed:", preflightError);
+          }
+
           // Start the game (backend will use transfer_from to get the tokens)
+          console.log("🎮 Calling backend startGame with:", {
+            betAmount: parseAmount(betAmount).toString(),
+            mineCount,
+            playerPrincipal: identity.getPrincipal().toString(),
+          });
+
           const result = await authMinesActor.startGame(
             parseAmount(betAmount),
             mineCount
+          );
+
+          console.log(
+            "📊 Backend startGame response:",
+            JSON.stringify(result, (key, value) =>
+              typeof value === "bigint" ? value.toString() : value
+            )
           );
 
           if ("Err" in result) {
@@ -1340,7 +1412,47 @@ const useBackendIntegration = () => {
             const error = result.Err;
 
             if (error.InsufficientBalance) {
-              errorMessage = "Insufficient token balance";
+              // Retry once after a delay if we get InsufficientBalance
+              // This could be due to backend balance check timing issues
+              console.log(
+                "⚠️ InsufficientBalance error detected, retrying after delay..."
+              );
+              await new Promise((resolve) => setTimeout(resolve, 2000));
+
+              console.log("🔄 Retrying startGame call...");
+              const retryResult = await authMinesActor.startGame(
+                parseAmount(betAmount),
+                mineCount
+              );
+
+              console.log(
+                "📊 Retry result:",
+                JSON.stringify(retryResult, (key, value) =>
+                  typeof value === "bigint" ? value.toString() : value
+                )
+              );
+
+              if ("Err" in retryResult && retryResult.Err.InsufficientBalance) {
+                errorMessage =
+                  "Insufficient token balance - please ensure you have enough tokens";
+              } else if ("Err" in retryResult) {
+                // Handle other retry errors
+                const retryError = retryResult.Err;
+                if (retryError.InsufficientAllowance) {
+                  errorMessage =
+                    "Insufficient token allowance. Please approve tokens first.";
+                } else if (retryError.TokenTransferFromError) {
+                  errorMessage =
+                    "Token transfer failed. Please check your balance and allowance.";
+                } else {
+                  errorMessage = `Game start failed on retry: ${JSON.stringify(
+                    retryError
+                  )}`;
+                }
+              } else {
+                // Retry succeeded
+                return retryResult.Ok || retryResult;
+              }
             } else if (error.InsufficientAllowance) {
               errorMessage =
                 "Insufficient token allowance. Please approve tokens first.";
@@ -1367,7 +1479,7 @@ const useBackendIntegration = () => {
           }
 
           await fetchBalance(); // Refresh balance
-          return result.Ok;
+          return result.Ok || result.ok || result;
         } finally {
           setLoading((prev) => ({ ...prev, mines: false }));
         }
@@ -1399,7 +1511,7 @@ const useBackendIntegration = () => {
             throw new Error(errorMessage);
           }
 
-          return result.Ok;
+          return result.Ok || result.ok;
         } finally {
           setLoading((prev) => ({ ...prev, mines: false }));
         }
@@ -1430,10 +1542,36 @@ const useBackendIntegration = () => {
           }
 
           await fetchBalance(); // Refresh balance
-          return result.Ok;
+          return result.Ok || result.ok;
         } finally {
           setLoading((prev) => ({ ...prev, mines: false }));
         }
+      },
+
+      // Get required approval amount for token approval
+      getRequiredApprovalAmount: async (betAmount) => {
+        if (!actors.mines) throw new Error("Mines actor not initialized");
+
+        return await retryActorCall(async () => {
+          return await actors.mines.getRequiredApprovalAmount(betAmount);
+        });
+      },
+
+      // Get player allowance (requires authentication)
+      getPlayerAllowance: async () => {
+        if (!principal) throw new Error("Not connected");
+
+        const { authMinesActor } = await createAuthenticatedActors();
+        return await authMinesActor.getPlayerAllowance();
+      },
+
+      // Get game canister principal
+      getGameCanisterPrincipal: async () => {
+        if (!actors.mines) throw new Error("Mines actor not initialized");
+
+        return await retryActorCall(async () => {
+          return await actors.mines.getGameCanisterPrincipal();
+        });
       },
     }),
     [

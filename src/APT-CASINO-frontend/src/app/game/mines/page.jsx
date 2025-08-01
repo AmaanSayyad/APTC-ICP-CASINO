@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import Tabs from "../../../components/Tabs";
 import DynamicForm from "./Form";
 import Game from "./game";
@@ -51,6 +53,16 @@ import GameDetail from "../../../components/GameDetail";
 import AIAutoBetting from "./components/AIAutoBetting";
 import AISettingsModal from "./components/AISettingsModal";
 
+/**
+ * Mines Game Page
+ *
+ * IMPORTANT NOTES ON RANDOMNESS:
+ * 1. All gameplay randomness (mine positions, game outcomes) is handled exclusively by the backend Motoko canister
+ * 2. The frontend only uses deterministic functions for UI-related "random" values (AI behaviors, settings)
+ * 3. No frontend randomness should ever affect actual game outcomes
+ *
+ * This ensures fair gameplay with proper cryptographic randomness from the Internet Computer blockchain.
+ */
 export default function Mines() {
   // ICP Integration
   const { isConnected, principal, connect } = useNFID();
@@ -94,31 +106,51 @@ export default function Mines() {
     },
   });
 
+  // Deterministic value generator based on seed and timestamp
+  // This mimics backend behavior for frontend UI purposes only
+  // All actual gameplay still relies on the backend's real randomness
+  const getDeterministicValue = (min, max, seedModifier = 0) => {
+    // Use timestamp + principal (if available) + seedModifier as the seed
+    const timestamp = new Date().getTime();
+    const principalNumber = principal
+      ? parseInt(principal.toString().replace(/\D/g, "").slice(0, 8))
+      : 0;
+    const seed = timestamp + principalNumber + seedModifier;
+
+    // Create a simple deterministic number generator similar to the backend approach
+    return min + (seed % (max - min + 1));
+  };
+
   // Theme
   const { theme } = useTheme();
 
   // Handle AI activation/deactivation
   const handleAIToggle = () => {
     if (!isAIActive) {
-      // When activating AI, generate some random settings based on AI strategy
+      // When activating AI, generate deterministic settings based on AI strategy
+      // This ensures consistent behavior while still appearing "random" to users
       const { strategy, tiles, mines } = aiSettings;
 
-      // Choose random mines count within AI settings range
-      const minesCount =
-        Math.floor(Math.random() * (mines.max - mines.min + 1)) + mines.min;
+      // Choose deterministic mines count within AI settings range
+      const minesCount = getDeterministicValue(mines.min, mines.max, 1);
 
-      // Choose random tiles to reveal within AI settings range
-      const tilesToReveal =
-        Math.floor(Math.random() * (tiles.max - tiles.min + 1)) + tiles.min;
+      // Choose deterministic tiles to reveal within AI settings range
+      const tilesToReveal = getDeterministicValue(tiles.min, tiles.max, 2);
 
-      // Generate a random bet amount based on strategy
+      // Generate a deterministic bet amount based on strategy
       let betAmount = 50; // default
       if (strategy === "conservative") {
-        betAmount = [10, 25, 50][Math.floor(Math.random() * 3)];
+        // Use seed modifier 3 for conservative strategy
+        const index = getDeterministicValue(0, 2, 3);
+        betAmount = [10, 25, 50][index];
       } else if (strategy === "balanced") {
-        betAmount = [50, 100, 250][Math.floor(Math.random() * 3)];
+        // Use seed modifier 4 for balanced strategy
+        const index = getDeterministicValue(0, 2, 4);
+        betAmount = [50, 100, 250][index];
       } else if (strategy === "aggressive") {
-        betAmount = [100, 250, 500][Math.floor(Math.random() * 3)];
+        // Use seed modifier 5 for aggressive strategy
+        const index = getDeterministicValue(0, 2, 5);
+        betAmount = [100, 250, 500][index];
       }
 
       // Create AI auto betting settings
@@ -154,6 +186,24 @@ export default function Mines() {
 
     console.log("Form submitted:", formData, "Auto betting:", isAutoBetting);
 
+    // Convert balance from e8s to APTC for comparison (aptcBalance is in e8s format)
+    const balanceInAPTC = aptcBalance ? Number(aptcBalance) / 100_000_000 : 0;
+    const betAmount = Number(formData.betAmount || 0);
+
+    // Validate bet amount against user balance
+    if (betAmount > balanceInAPTC) {
+      // Show error using toast
+      toast.error(
+        `Insufficient balance: You have ${balanceInAPTC.toFixed(
+          2
+        )} APTC but tried to bet ${betAmount.toFixed(2)} APTC`
+      );
+      console.warn(
+        `❌ Bet amount (${betAmount}) exceeds available balance (${balanceInAPTC})`
+      );
+      return; // Prevent form submission
+    }
+
     // Update bet settings which will be passed to the game component
     setBetSettings({
       ...formData,
@@ -172,22 +222,27 @@ export default function Mines() {
     if (isAIActive) {
       const { strategy, tiles, mines } = newSettings;
 
-      // Choose random mines count within AI settings range
-      const minesCount =
-        Math.floor(Math.random() * (mines.max - mines.min + 1)) + mines.min;
+      // Choose deterministic mines count within AI settings range
+      // Using different seed modifiers (10+) to ensure different values from handleAIToggle
+      const minesCount = getDeterministicValue(mines.min, mines.max, 11);
 
-      // Choose random tiles to reveal within AI settings range
-      const tilesToReveal =
-        Math.floor(Math.random() * (tiles.max - tiles.min + 1)) + tiles.min;
+      // Choose deterministic tiles to reveal within AI settings range
+      const tilesToReveal = getDeterministicValue(tiles.min, tiles.max, 12);
 
-      // Generate a random bet amount based on strategy
+      // Generate a deterministic bet amount based on strategy
       let betAmount = 50; // default
       if (strategy === "conservative") {
-        betAmount = [10, 25, 50][Math.floor(Math.random() * 3)];
+        // Use seed modifier for conservative strategy
+        const index = getDeterministicValue(0, 2, 13);
+        betAmount = [10, 25, 50][index];
       } else if (strategy === "balanced") {
-        betAmount = [50, 100, 250][Math.floor(Math.random() * 3)];
+        // Use seed modifier for balanced strategy
+        const index = getDeterministicValue(0, 2, 14);
+        betAmount = [50, 100, 250][index];
       } else if (strategy === "aggressive") {
-        betAmount = [100, 250, 500][Math.floor(Math.random() * 3)];
+        // Use seed modifier for aggressive strategy
+        const index = getDeterministicValue(0, 2, 15);
+        betAmount = [100, 250, 500][index];
       }
 
       // Update bet settings
@@ -958,6 +1013,18 @@ export default function Mines() {
 
   return (
     <div className="min-h-screen bg-[#070005] bg-gradient-to-b from-[#070005] to-[#0e0512] pb-20 text-white mines-bg custom-scrollbar">
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="dark"
+      />
       <div className="pt-16">
         {renderHeader()}
         {renderMainContent()}
@@ -985,23 +1052,7 @@ export default function Mines() {
         className="fixed inset-0 pointer-events-none z-0"
       ></div>
 
-      {/* Customized scrollbar */}
-      <style jsx global>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: rgba(75, 30, 150, 0.1);
-          border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(139, 92, 246, 0.3);
-          border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgba(139, 92, 246, 0.5);
-        }
-      `}</style>
+      {/* Customized scrollbar styles added to CSS file instead */}
     </div>
   );
 }

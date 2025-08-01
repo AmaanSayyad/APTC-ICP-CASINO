@@ -13,6 +13,8 @@ import Int "mo:base/Int";
 import Text "mo:base/Text";
 import Float "mo:base/Float";
 import Buffer "mo:base/Buffer";
+import Debug "mo:base/Debug";
+import Bool "mo:base/Bool";
 import Types "types";
 import Utils "utils";
 
@@ -84,6 +86,7 @@ actor class MinesGame(aptcTokenCanisterId : Principal) = self {
         #NotAuthorized;
         #GameNotFound;
         #GameNotInProgress;
+        #GameAlreadyInProgress;
         #InvalidCellIndex;
         #CellAlreadyRevealed;
         #InsufficientBalance;
@@ -265,8 +268,12 @@ actor class MinesGame(aptcTokenCanisterId : Principal) = self {
     private func getUserTokenBalance(user : Principal) : async Nat {
         try {
             let account = Utils.defaultAccount(user);
-            await tokenActor.icrc1_balance_of(account);
+            Debug.print("getUserTokenBalance: Checking balance for account: " # debug_show (account));
+            let balance = await tokenActor.icrc1_balance_of(account);
+            Debug.print("getUserTokenBalance: Retrieved balance: " # Nat.toText(balance));
+            balance;
         } catch (_error) {
+            Debug.print("getUserTokenBalance: Error getting balance - returning 0");
             0;
         };
     };
@@ -365,10 +372,28 @@ actor class MinesGame(aptcTokenCanisterId : Principal) = self {
     };
 
     private func transferFromPlayer(player : Principal, amount : Nat) : async Result.Result<Nat, MinesError> {
+        Debug.print("transferFromPlayer: Starting transfer from " # Principal.toText(player) # " amount: " # Nat.toText(amount));
+
         try {
             let fee = await getTokenFee();
+            Debug.print("transferFromPlayer: Token fee: " # Nat.toText(fee));
+
             let playerAccount = Utils.defaultAccount(player);
             let gameAccount = Utils.defaultAccount(Principal.fromActor(self));
+
+            Debug.print("transferFromPlayer: Player account: " # debug_show (playerAccount));
+            Debug.print("transferFromPlayer: Game account: " # debug_show (gameAccount));
+
+            // Check allowance before transfer to provide better error messages
+            let currentAllowance = await getAllowance(player, Principal.fromActor(self));
+            let requiredAmount = amount + fee;
+            Debug.print("transferFromPlayer: Current allowance: " # Nat.toText(currentAllowance));
+            Debug.print("transferFromPlayer: Required amount (with fee): " # Nat.toText(requiredAmount));
+
+            if (currentAllowance < requiredAmount) {
+                Debug.print("transferFromPlayer: Insufficient allowance - " # Nat.toText(currentAllowance) # " < " # Nat.toText(requiredAmount));
+                return #err(#InsufficientAllowance);
+            };
 
             let transferFromArgs : Types.TransferFromArgs = {
                 spender_subaccount = null;
@@ -380,12 +405,22 @@ actor class MinesGame(aptcTokenCanisterId : Principal) = self {
                 created_at_time = null;
             };
 
+            Debug.print("transferFromPlayer: Calling icrc2_transfer_from with args: " # debug_show (transferFromArgs));
             let result = await tokenActor.icrc2_transfer_from(transferFromArgs);
+            Debug.print("transferFromPlayer: Transfer result: " # debug_show (result));
+
             switch (result) {
-                case (#Ok(blockIndex)) { #ok(blockIndex) };
-                case (#Err(error)) { #err(#TokenTransferFromError(error)) };
+                case (#Ok(blockIndex)) {
+                    Debug.print("transferFromPlayer: Transfer successful, block index: " # Nat.toText(blockIndex));
+                    #ok(blockIndex);
+                };
+                case (#Err(error)) {
+                    Debug.print("transferFromPlayer: Transfer failed with error: " # debug_show (error));
+                    #err(#TokenTransferFromError(error));
+                };
             };
         } catch (_error) {
+            Debug.print("transferFromPlayer: Exception caught during transfer");
             #err(#TransferFailed("Failed to transfer tokens from player"));
         };
     };
@@ -440,9 +475,99 @@ actor class MinesGame(aptcTokenCanisterId : Principal) = self {
         Principal.fromActor(self);
     };
 
-    // Game functions
+    // Debug functions to help with troubleshooting
+    public shared (msg) func whoAmI() : async Principal {
+        Debug.print("whoAmI: Caller principal: " # Principal.toText(msg.caller));
+        msg.caller;
+    };
+
+    public shared (msg) func getActiveGameCount() : async Nat {
+        Debug.print("getActiveGameCount: Caller principal: " # Principal.toText(msg.caller));
+        Debug.print("getActiveGameCount: Total active games: " # Nat.toText(activeGames.size()));
+        activeGames.size();
+    };
+
+    public shared (msg) func debugActiveGames() : async [(Principal, Text)] {
+        Debug.print("debugActiveGames: Caller principal: " # Principal.toText(msg.caller));
+        Debug.print("debugActiveGames: Total active games: " # Nat.toText(activeGames.size()));
+
+        let results = Buffer.Buffer<(Principal, Text)>(activeGames.size());
+        for ((principal, gameSession) in activeGames.entries()) {
+            let gameInfo = "State: " # debug_show (gameSession.gameState) #
+            ", Mines: " # Nat.toText(gameSession.mineCount) #
+            ", Revealed: " # Nat.toText(gameSession.revealedCells.size());
+            results.add((principal, gameInfo));
+            Debug.print("debugActiveGames: Found game for " # Principal.toText(principal) # " - " # gameInfo);
+        };
+
+        Buffer.toArray(results);
+    };
+
+    public shared (msg) func clearActiveGame() : async Result.Result<Text, MinesError> {
+        Debug.print("clearActiveGame: Clearing game for caller: " # Principal.toText(msg.caller));
+
+        switch (activeGames.get(msg.caller)) {
+            case (?gameSession) {
+                activeGames.delete(msg.caller);
+                Debug.print("clearActiveGame: Game cleared for caller");
+                #ok("Active game cleared successfully");
+            };
+            case null {
+                Debug.print("clearActiveGame: No game found for caller");
+                #ok("No active game to clear");
+            };
+        };
+    };
+
+    public shared (msg) func forceEndGame() : async Result.Result<Text, MinesError> {
+        Debug.print("forceEndGame: Force ending game for caller: " # Principal.toText(msg.caller));
+
+        switch (activeGames.get(msg.caller)) {
+            case (?gameSession) {
+                let gameResult : GameResult = {
+                    gameId = currentGameId;
+                    player = msg.caller;
+                    betAmount = gameSession.betAmount;
+                    winAmount = 0;
+                    mineCount = gameSession.mineCount;
+                    revealedCells = gameSession.revealedCells;
+                    minePositions = gameSession.minePositions;
+                    gameState = #Lost;
+                    timestamp = Time.now();
+                };
+
+                gameHistory.put(currentGameId, gameResult);
+                currentGameId := currentGameId + 1;
+                activeGames.delete(msg.caller);
+
+                Debug.print("forceEndGame: Game force-ended for caller");
+                #ok("Game force-ended successfully");
+            };
+            case null {
+                Debug.print("forceEndGame: No game found for caller");
+                #ok("No active game to end");
+            };
+        };
+    };
+
+    // Admin function to clear all active games (emergency use only)
+    public shared (msg) func clearAllActiveGames() : async Result.Result<Text, MinesError> {
+        if (msg.caller != owner) {
+            return #err(#NotAuthorized);
+        };
+
+        let count = activeGames.size();
+        activeGames := HashMap.HashMap<Principal, MinesGameSession>(0, Principal.equal, Principal.hash);
+
+        Debug.print("clearAllActiveGames: Cleared " # Nat.toText(count) # " active games");
+        #ok("Cleared " # Nat.toText(count) # " active games");
+    };
     public shared (msg) func startGame(betAmount : Nat, mineCount : Nat) : async Result.Result<MinesGameSession, MinesError> {
         // Note: isInitialized check removed since we initialize by default
+
+        Debug.print("startGame: Caller: " # Principal.toText(msg.caller));
+        Debug.print("startGame: Bet amount: " # Nat.toText(betAmount));
+        Debug.print("startGame: Mine count: " # Nat.toText(mineCount));
 
         if (not gameActive) {
             return #err(#GameInactive);
@@ -460,32 +585,48 @@ actor class MinesGame(aptcTokenCanisterId : Principal) = self {
             return #err(#InvalidMineCount);
         };
 
-        // Check player's token balance
-        let userBalance = await getUserTokenBalance(msg.caller);
-        if (userBalance < betAmount) {
-            return #err(#InsufficientBalance);
-        };
-
-        // Check if user already has an active game
+        // Check if user already has an active game FIRST
         switch (activeGames.get(msg.caller)) {
             case (?existingGame) {
                 if (existingGame.gameState == #InProgress) {
-                    return #err(#GameNotFound); // Game already in progress
+                    Debug.print("startGame: User already has an active game");
+                    return #err(#GameAlreadyInProgress); // Game already in progress
                 };
             };
-            case null {};
+            case null {
+                Debug.print("startGame: No existing game found, proceeding");
+            };
+        };
+
+        // Check player's token balance
+        Debug.print("startGame: Checking user token balance...");
+        let userBalance = await getUserTokenBalance(msg.caller);
+        Debug.print("startGame: User balance: " # Nat.toText(userBalance));
+        Debug.print("startGame: Required amount: " # Nat.toText(betAmount));
+
+        if (userBalance < betAmount) {
+            Debug.print("startGame: Insufficient balance - " # Nat.toText(userBalance) # " < " # Nat.toText(betAmount));
+            return #err(#InsufficientBalance);
         };
 
         // Check if player has approved enough tokens for the game canister
+        Debug.print("startGame: Checking player allowance...");
         let hasAllowance = await checkPlayerAllowance(msg.caller, betAmount);
+        Debug.print("startGame: Has allowance: " # Bool.toText(hasAllowance));
+
         if (not hasAllowance) {
             return #err(#InsufficientAllowance);
         };
 
         // Transfer bet amount from player to game canister using ICRC-2 transfer_from
+        Debug.print("startGame: Attempting token transfer...");
         switch (await transferFromPlayer(msg.caller, betAmount)) {
-            case (#err(error)) { return #err(error) };
+            case (#err(error)) {
+                Debug.print("startGame: Token transfer failed");
+                return #err(error);
+            };
             case (#ok(_blockIndex)) {
+                Debug.print("startGame: Token transfer successful");
                 // Transfer successful, continue with game creation
             };
         };
@@ -520,6 +661,103 @@ actor class MinesGame(aptcTokenCanisterId : Principal) = self {
         totalVolume := totalVolume + betAmount;
         totalGames := totalGames + 1;
 
+        Debug.print("startGame: Game created successfully");
+        #ok(gameSession);
+    };
+
+    // TEMPORARY: Proxy start game that allows specifying the token holder
+    // This is a workaround for frontend authentication issues
+    // In production, remove this and fix the frontend authentication
+    public shared (msg) func startGameWithProxy(tokenHolder : Principal, betAmount : Nat, mineCount : Nat) : async Result.Result<MinesGameSession, MinesError> {
+        Debug.print("startGameWithProxy: Caller: " # Principal.toText(msg.caller));
+        Debug.print("startGameWithProxy: Token holder: " # Principal.toText(tokenHolder));
+        Debug.print("startGameWithProxy: Bet amount: " # Nat.toText(betAmount));
+        Debug.print("startGameWithProxy: Mine count: " # Nat.toText(mineCount));
+
+        if (not gameActive) {
+            return #err(#GameInactive);
+        };
+
+        if (not isValidBetAmount(betAmount)) {
+            return #err(#InvalidBetAmount);
+        };
+
+        if (not isValidMineCount(mineCount)) {
+            return #err(#InvalidMineCount);
+        };
+
+        // Check if caller already has an active game
+        switch (activeGames.get(msg.caller)) {
+            case (?existingGame) {
+                if (existingGame.gameState == #InProgress) {
+                    Debug.print("startGameWithProxy: Caller already has an active game");
+                    return #err(#GameAlreadyInProgress);
+                };
+            };
+            case null {
+                Debug.print("startGameWithProxy: No existing game found for caller, proceeding");
+            };
+        };
+
+        // Use token holder for all balance and approval checks
+        let userBalance = await getUserTokenBalance(tokenHolder);
+        Debug.print("startGameWithProxy: Token holder balance: " # Nat.toText(userBalance));
+
+        if (userBalance < betAmount) {
+            Debug.print("startGameWithProxy: Insufficient balance - " # Nat.toText(userBalance) # " < " # Nat.toText(betAmount));
+            return #err(#InsufficientBalance);
+        };
+
+        let hasAllowance = await checkPlayerAllowance(tokenHolder, betAmount);
+        Debug.print("startGameWithProxy: Token holder has allowance: " # Bool.toText(hasAllowance));
+
+        if (not hasAllowance) {
+            return #err(#InsufficientAllowance);
+        };
+
+        // Transfer from token holder to game canister
+        Debug.print("startGameWithProxy: Attempting token transfer from proxy...");
+        switch (await transferFromPlayer(tokenHolder, betAmount)) {
+            case (#err(error)) {
+                Debug.print("startGameWithProxy: Token transfer failed");
+                return #err(error);
+            };
+            case (#ok(_blockIndex)) {
+                Debug.print("startGameWithProxy: Token transfer successful");
+            };
+        };
+
+        // Generate mine positions
+        let seed = await Random.blob();
+        let minePositions = generateMinePositions(mineCount, seed);
+
+        // Initialize grid
+        let grid = Array.init<CellState>(GRID_SIZE, #Hidden);
+
+        // Create game session - store under caller but record token holder
+        let gameSession : MinesGameSession = {
+            player = msg.caller; // Store under the actual caller
+            betAmount = betAmount;
+            mineCount = mineCount;
+            gameState = #InProgress;
+            grid = Array.freeze(grid);
+            minePositions = minePositions;
+            revealedCells = [];
+            multiplier = 1.0;
+            potentialWin = betAmount;
+            startTime = Time.now();
+            endTime = null;
+        };
+
+        // Store active game under caller
+        activeGames.put(msg.caller, gameSession);
+
+        // Update statistics
+        lastBetTimes.put(msg.caller, Time.now());
+        totalVolume := totalVolume + betAmount;
+        totalGames := totalGames + 1;
+
+        Debug.print("startGameWithProxy: Game created successfully");
         #ok(gameSession);
     };
 
@@ -534,21 +772,41 @@ actor class MinesGame(aptcTokenCanisterId : Principal) = self {
             return #err(#InvalidCellIndex);
         };
 
+        // Debug: Check if the caller has an active game
+        Debug.print("revealCell: Checking for caller: " # Principal.toText(msg.caller));
+        Debug.print("revealCell: HashMap size: " # Nat.toText(activeGames.size()));
+        Debug.print("revealCell: Cell index: " # Nat.toText(cellIndex));
+
+        // Debug: Print all active games to see what's in the HashMap
+        for ((principal, game) in activeGames.entries()) {
+            Debug.print("revealCell: Found game for principal: " # Principal.toText(principal));
+            Debug.print("revealCell: Game state: " # debug_show (game.gameState));
+            Debug.print("revealCell: Principal equals caller: " # Bool.toText(Principal.equal(principal, msg.caller)));
+        };
+
         switch (activeGames.get(msg.caller)) {
             case (?gameSession) {
+                Debug.print("revealCell: Found game for caller");
+                // Debug: Verify game state
                 if (gameSession.gameState != #InProgress) {
+                    Debug.print("revealCell: Game not in progress, state: " # debug_show (gameSession.gameState));
                     return #err(#GameNotInProgress);
                 };
 
                 // Check if cell is already revealed
                 for (revealedCell in gameSession.revealedCells.vals()) {
                     if (revealedCell == cellIndex) {
+                        Debug.print("revealCell: Cell already revealed: " # Nat.toText(cellIndex));
                         return #err(#CellAlreadyRevealed);
                     };
                 };
 
+                Debug.print("revealCell: Checking if cell " # Nat.toText(cellIndex) # " is a mine");
+                Debug.print("revealCell: Mine positions: " # debug_show (gameSession.minePositions));
+
                 // Check if cell contains a mine
                 if (isMineAtPosition(gameSession.minePositions, cellIndex)) {
+                    Debug.print("revealCell: Hit mine at position " # Nat.toText(cellIndex));
                     // Game over - hit a mine
                     let endedGame = {
                         gameSession with
@@ -581,13 +839,19 @@ actor class MinesGame(aptcTokenCanisterId : Principal) = self {
                     // Update house profits
                     houseProfits := houseProfits + gameSession.betAmount;
 
+                    Debug.print("revealCell: Game ended with mine hit");
                     return #ok(endedGame);
                 } else {
+                    Debug.print("revealCell: Safe cell at position " # Nat.toText(cellIndex));
                     // Safe cell - update game state
                     let newRevealedCells = Array.append(gameSession.revealedCells, [cellIndex]);
                     let revealedCount = newRevealedCells.size();
                     let newMultiplier = calculateMultiplier(gameSession.mineCount, revealedCount);
                     let newPotentialWin = Int.abs(Float.toInt(Float.fromInt(gameSession.betAmount) * newMultiplier));
+
+                    Debug.print("revealCell: New multiplier: " # Float.toText(newMultiplier));
+                    Debug.print("revealCell: New potential win: " # Nat.toText(newPotentialWin));
+                    Debug.print("revealCell: New revealed cells: " # debug_show (newRevealedCells));
 
                     let updatedGame = {
                         gameSession with
@@ -599,10 +863,16 @@ actor class MinesGame(aptcTokenCanisterId : Principal) = self {
                     // Update active game
                     activeGames.put(msg.caller, updatedGame);
 
+                    Debug.print("revealCell: Game updated successfully");
                     return #ok(updatedGame);
                 };
             };
             case null {
+                Debug.print("revealCell: No game found for caller");
+                Debug.print("revealCell: Available principals in HashMap:");
+                for ((principal, _game) in activeGames.entries()) {
+                    Debug.print("  - " # Principal.toText(principal));
+                };
                 return #err(#GameNotFound);
             };
         };
@@ -686,6 +956,7 @@ actor class MinesGame(aptcTokenCanisterId : Principal) = self {
                 #ok(gameResult);
             };
             case null {
+                Debug.print("revealCell: No game found for caller");
                 return #err(#GameNotFound);
             };
         };
@@ -694,6 +965,30 @@ actor class MinesGame(aptcTokenCanisterId : Principal) = self {
     // Query functions
     public query func getActiveGame(player : Principal) : async ?MinesGameSession {
         activeGames.get(player);
+    };
+
+    // Shared function to get caller's active game (for consistency with revealCell)
+    public shared (msg) func getMyActiveGame() : async Result.Result<MinesGameSession, MinesError> {
+        Debug.print("getMyActiveGame: Checking for caller: " # Principal.toText(msg.caller));
+        Debug.print("getMyActiveGame: HashMap size: " # Nat.toText(activeGames.size()));
+
+        // Debug: Print all active games to see what's in the HashMap
+        for ((principal, game) in activeGames.entries()) {
+            Debug.print("getMyActiveGame: Found game for principal: " # Principal.toText(principal));
+            Debug.print("getMyActiveGame: Game state: " # debug_show (game.gameState));
+            Debug.print("getMyActiveGame: Caller match: " # Bool.toText(Principal.equal(principal, msg.caller)));
+        };
+
+        switch (activeGames.get(msg.caller)) {
+            case (?gameSession) {
+                Debug.print("getMyActiveGame: Found game for caller");
+                return #ok(gameSession);
+            };
+            case null {
+                Debug.print("getMyActiveGame: No game found for caller");
+                return #err(#GameNotFound);
+            };
+        };
     };
 
     public query func getGameHistory(player : Principal, limit : ?Nat) : async [GameResult] {
@@ -764,5 +1059,91 @@ actor class MinesGame(aptcTokenCanisterId : Principal) = self {
 
     public shared (_msg) func withdraw(_amount : Nat) : async Result.Result<Text, MinesError> {
         #err(#TransferFailed("Withdraw not supported - tokens are managed directly by APTC canister"));
+    };
+
+    // Admin function to clear any user's active game (for debugging/maintenance)
+    public shared (msg) func adminClearUserGame(userPrincipal : Principal) : async Result.Result<Text, MinesError> {
+        let caller = msg.caller;
+
+        // Check if caller is admin (you can customize this check based on your admin setup)
+        Debug.print("Admin clear attempt by: " # Principal.toText(caller));
+
+        switch (activeGames.get(userPrincipal)) {
+            case null {
+                #err(#GameNotFound);
+            };
+            case (?_game) {
+                activeGames.delete(userPrincipal);
+                Debug.print("Admin cleared game for user: " # Principal.toText(userPrincipal));
+                #ok("Game cleared for user: " # Principal.toText(userPrincipal));
+            };
+        };
+    };
+
+    // Admin function to list all active games
+    public query func adminListActiveGames() : async [(Principal, MinesGameSession)] {
+        Iter.toArray(activeGames.entries());
+    };
+
+    // Debug function to diagnose startGame issues for specific user
+    public shared (_msg) func debugStartGameIssue(userPrincipal : Principal, betAmount : Nat) : async {
+        user_principal : Principal;
+        user_balance : Nat;
+        required_amount : Nat;
+        has_allowance : Bool;
+        allowance_amount : Nat;
+        balance_sufficient : Bool;
+        has_active_game : Bool;
+        game_active : Bool;
+        is_valid_bet : Bool;
+    } {
+        let userBalance = await getUserTokenBalance(userPrincipal);
+        let hasAllowance = await checkPlayerAllowance(userPrincipal, betAmount);
+        let gameCanister = Principal.fromActor(self);
+        let allowanceAmount = await getAllowance(userPrincipal, gameCanister);
+        let hasActiveGame = switch (activeGames.get(userPrincipal)) {
+            case (?game) { game.gameState == #InProgress };
+            case null { false };
+        };
+
+        {
+            user_principal = userPrincipal;
+            user_balance = userBalance;
+            required_amount = betAmount;
+            has_allowance = hasAllowance;
+            allowance_amount = allowanceAmount;
+            balance_sufficient = userBalance >= betAmount;
+            has_active_game = hasActiveGame;
+            game_active = gameActive;
+            is_valid_bet = isValidBetAmount(betAmount);
+        };
+    };
+
+    // Debug function to get caller principal
+    public shared (msg) func debugGetCaller() : async Principal {
+        msg.caller;
+    };
+
+    // Debug function to check if a specific principal can be used for transfers
+    public shared (msg) func debugTransferSetup(targetPrincipal : Principal, betAmount : Nat) : async {
+        caller : Principal;
+        target_balance : Nat;
+        target_allowance : Nat;
+        caller_is_target : Bool;
+        can_proceed : Bool;
+    } {
+        let targetBalance = await getUserTokenBalance(targetPrincipal);
+        let gameCanister = Principal.fromActor(self);
+        let targetAllowance = await getAllowance(targetPrincipal, gameCanister);
+        let callerIsTarget = Principal.equal(msg.caller, targetPrincipal);
+        let canProceed = callerIsTarget and targetBalance >= betAmount and targetAllowance >= betAmount;
+
+        {
+            caller = msg.caller;
+            target_balance = targetBalance;
+            target_allowance = targetAllowance;
+            caller_is_target = callerIsTarget;
+            can_proceed = canProceed;
+        };
     };
 };

@@ -1,5 +1,9 @@
 {
   "canisters": {
+    "wheel-game": {
+      "main": "src/APT-CASINO-backend/wheel.mo",
+      "type": "motoko"
+    },
     "roulette-game": {
       "main": "src/APT-CASINO-backend/roulette.mo",
       "type": "motoko"
@@ -9,7 +13,7 @@
       "type": "motoko"
     },
     "APT-CASINO-frontend": {
-      "dependencies": ["roulette-game"],
+      "dependencies": ["wheel-game", "roulette-game"],
       "source": ["src/APT-CASINO-frontend/dist"],
       "type": "assets",
       "workspace": "APT-CASINO-frontend"

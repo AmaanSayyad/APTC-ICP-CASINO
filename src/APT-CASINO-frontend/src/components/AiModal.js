@@ -2,7 +2,7 @@
 import GradientBgButton from "./GradientBgButton";
 import GradientBorderButton from "./GradientBorderButton";
 import { useState } from "react";
-// import { useModal } from "@/lib/context/ModalContext";
+// import { useModal } from "../lib/context/ModalContext";
 
 export default function AiModal() {
   const [editing, setEditing] = useState(false);
@@ -28,9 +28,8 @@ export default function AiModal() {
           <img
             src="/images/avatar.png"
             alt="display picture"
-            fill
-            className="object-cover"
-          >
+            className="object-cover w-full h-full"
+          />
         </div>
         <div>
           <div className="details flex justify-between my-6 font-medium">

@@ -11,11 +11,12 @@ import {
 
 // Token canister configuration - use environment variable
 const TOKEN_CANISTER_ID =
-  import.meta.env.CANISTER_ID_APTC_TOKEN || "be2us-64aaa-aaaaa-qaabq-cai";
+  process.env.CANISTER_ID_APTC_TOKEN || "be2us-64aaa-aaaaa-qaabq-cai";
 const ROULETTE_CANISTER_ID =
-  import.meta.env.CANISTER_ID_ROULETTE_GAME || "bw4dl-smaaa-aaaaa-qaacq-cai";
+  process.env.CANISTER_ID_ROULETTE_GAME || "bw4dl-smaaa-aaaaa-qaacq-cai";
 // Casino treasury principal (where bet tokens are sent)
-const CASINO_TREASURY_PRINCIPAL = "sz4hb-taaaa-aaaah-qdrqq-cai"; // Corrected casino principal
+const CASINO_TREASURY_PRINCIPAL =
+  process.env.CASINO_TREASURY_PRINCIPAL || "sz4hb-taaaa-aaaah-qdrqq-cai"; // Corrected casino principal
 
 // Enhanced IDL with betting functions
 const basicTokenIdl = ({ IDL }) => {

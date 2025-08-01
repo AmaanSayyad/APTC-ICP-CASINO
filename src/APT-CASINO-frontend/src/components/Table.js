@@ -1,5 +1,5 @@
-import GradientBgButton from "@/components/GradientBgButton";
-import GradientBorderButton from "@/components/GradientBorderButton";
+import GradientBgButton from "./GradientBgButton";
+import GradientBorderButton from "./GradientBorderButton";
 import polygon from "../../../../public/images/Polygon.png";
 
 export const Table = () => {

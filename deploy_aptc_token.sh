@@ -63,7 +63,7 @@ dfx deploy APTC-token --argument "(variant {
     max_message_size_bytes = null;
     feature_flags = opt record { icrc2 = true };
   }
-})" --playground
+})" 
 
 echo "✅ APTC Token deployed successfully!"
 

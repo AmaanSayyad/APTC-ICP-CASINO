@@ -51,6 +51,10 @@ export default defineConfig({
         find: "declarations",
         replacement: fileURLToPath(new URL("../declarations", import.meta.url)),
       },
+      {
+        find: "@public",
+        replacement: fileURLToPath(new URL("./public", import.meta.url)),
+      },
     ],
     dedupe: ["@dfinity/agent"],
   },

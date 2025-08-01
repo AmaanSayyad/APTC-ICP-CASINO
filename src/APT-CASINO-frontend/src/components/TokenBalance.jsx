@@ -74,37 +74,10 @@ const TokenBalance = () => {
       // Convert BigInt to number for formatting
       const balanceNum = Number(balance) / 100000000;
 
-      // Format with appropriate decimal places and thousand separators
-      if (balanceNum >= 1000000) {
-        return (
-          (balanceNum / 1000000).toLocaleString("en-US", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          }) + "M"
-        );
-      } else if (balanceNum >= 1000) {
-        return (
-          (balanceNum / 1000).toLocaleString("en-US", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          }) + "K"
-        );
-      } else if (balanceNum >= 1) {
-        return balanceNum.toLocaleString("en-US", {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        });
-      } else if (balanceNum >= 0.01) {
-        return balanceNum.toLocaleString("en-US", {
-          minimumFractionDigits: 4,
-          maximumFractionDigits: 4,
-        });
-      } else {
-        return balanceNum.toLocaleString("en-US", {
-          minimumFractionDigits: 6,
-          maximumFractionDigits: 8,
-        });
-      }
+      return balanceNum.toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
     } catch (err) {
       console.error("Error formatting balance:", err);
       return "0.00";
@@ -115,7 +88,7 @@ const TokenBalance = () => {
     setMounted(true);
   }, []);
 
-  // Enhanced balance refresh function with instant updates
+  // Enhanced balance refresh function with improved e8s handling and retry mechanism
   const refreshBalance = async (showLoader = false) => {
     if (!isConnected || !principal || !getBalance) return;
 
@@ -124,13 +97,63 @@ const TokenBalance = () => {
     }
 
     try {
-      const newBalance = await getBalance(true);
+      // Log the current balance for comparison
       console.log(
-        "💰 Balance refreshed instantly:",
-        newBalance?.toString?.() || String(newBalance)
+        "💰 Current balance before refresh:",
+        balance?.toString?.() || String(balance),
+        `(${formatDisplayBalance(balance)} APTC)`
+      );
+
+      // Try to refresh multiple times with increasing delays
+      // This helps when blockchain transactions take a moment to finalize
+      let attempts = 0;
+      let newBalance;
+
+      const tryRefresh = async () => {
+        attempts++;
+        try {
+          console.log(`🔄 Balance refresh attempt ${attempts}...`);
+          const result = await getBalance(true);
+          console.log(
+            `✅ Attempt ${attempts} successful:`,
+            result?.toString?.() || String(result),
+            `(${formatDisplayBalance(result)} APTC)`
+          );
+          return result;
+        } catch (err) {
+          console.error(`❌ Balance refresh attempt ${attempts} failed:`, err);
+          if (attempts >= 3) throw err;
+          // Increasing delay between attempts
+          const delay = attempts * 300;
+          console.log(`⏱️ Waiting ${delay}ms before next attempt...`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          return null;
+        }
+      };
+
+      // Try up to 3 times to get the balance with increasing delays
+      for (let i = 0; i < 3; i++) {
+        newBalance = await tryRefresh();
+        if (newBalance !== null) break;
+      }
+
+      // Calculate difference for logging
+      const balanceBefore = Number(balance) / 100_000_000;
+      const balanceAfter = Number(newBalance) / 100_000_000;
+      const difference = balanceAfter - balanceBefore;
+
+      console.log(
+        "💰 Balance refresh complete:",
+        `Before: ${balanceBefore.toFixed(2)} APTC`,
+        `After: ${balanceAfter.toFixed(2)} APTC`,
+        `Difference: ${difference > 0 ? "+" : ""}${difference.toFixed(2)} APTC`,
+        `(after ${attempts} attempt${attempts !== 1 ? "s" : ""})`
       );
     } catch (err) {
-      console.error("❌ Failed to refresh balance:", err);
+      console.error(
+        "❌ Failed to refresh balance after multiple attempts:",
+        err
+      );
     } finally {
       if (showLoader) {
         setIsRefreshing(false);
@@ -154,10 +177,23 @@ const TokenBalance = () => {
   // Listen for game result events and transaction events
   useEffect(() => {
     const handleGameResult = (event) => {
+      console.log("🎮 Game result event received:", event.detail);
+
+      // Add detailed logging to help diagnose cashout issues
+      const { game, result, payout, payoutE8s, formattedPayout, multiplier } =
+        event.detail || {};
       console.log(
-        "🎮 Game result event received, refreshing balance instantly"
+        `🎮 Game ${game} result: ${result || "completed"}, Payout: ${
+          formattedPayout || payout
+        } APTC` +
+          `${payoutE8s ? ` (${payoutE8s} e8s)` : ""}` +
+          `${multiplier ? ` at ${multiplier}x` : ""}`
       );
-      refreshBalance(false);
+
+      // Force balance refresh with a slight delay to ensure transaction is complete
+      setTimeout(() => {
+        refreshBalance(true);
+      }, 500);
     };
 
     const handleTokenTransfer = (event) => {
@@ -168,8 +204,33 @@ const TokenBalance = () => {
     };
 
     const handleBetPlaced = (event) => {
-      console.log("🎯 Bet placed event received, refreshing balance instantly");
-      refreshBalance(false);
+      console.log("🎯 Bet placed event received:", event.detail);
+
+      // Add detailed logging to help diagnose the issue
+      const { game, amount, amountE8s, formattedAmount } = event.detail || {};
+      console.log(
+        `💰 Bet placed in ${game}: ${formattedAmount || amount} APTC${
+          amountE8s ? ` (${amountE8s} e8s)` : ""
+        }`
+      );
+
+      refreshBalance(true); // Force refresh to ensure balance is updated
+    };
+
+    const handleTokenApproved = (event) => {
+      console.log("🔐 Token approval event received:", event.detail);
+
+      // Add detailed logging for token approval events
+      const { game, amount, amountE8s, formattedAmount } = event.detail || {};
+      console.log(
+        `🔐 Token approval in ${game}: ${formattedAmount || amount} APTC` +
+          `${amountE8s ? ` (${amountE8s} e8s)` : ""}`
+      );
+
+      // Allow a moment for approval to process, then refresh
+      setTimeout(() => {
+        refreshBalance(true); // Force refresh for approval events
+      }, 300);
     };
 
     // Listen for various transaction events
@@ -178,6 +239,7 @@ const TokenBalance = () => {
     window.addEventListener("betPlaced", handleBetPlaced);
     window.addEventListener("tokenSpent", handleTokenTransfer);
     window.addEventListener("tokenReceived", handleTokenTransfer);
+    window.addEventListener("tokenApproved", handleTokenApproved);
 
     return () => {
       window.removeEventListener("gameResult", handleGameResult);
@@ -185,6 +247,7 @@ const TokenBalance = () => {
       window.removeEventListener("betPlaced", handleBetPlaced);
       window.removeEventListener("tokenSpent", handleTokenTransfer);
       window.removeEventListener("tokenReceived", handleTokenTransfer);
+      window.removeEventListener("tokenApproved", handleTokenApproved);
     };
   }, []);
 

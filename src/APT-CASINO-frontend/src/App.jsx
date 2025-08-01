@@ -13,6 +13,7 @@ import RouletteGame from "./app/game/roulette/page.jsx";
 // Enhanced backend-integrated components
 import EnhancedRouletteGame from "./components/games/EnhancedRouletteGame.jsx";
 import Mines from "./app/game/mines/page";
+import WheelGame from "./app/game/wheel/page";
 
 function App() {
   return (
@@ -36,6 +37,7 @@ function App() {
               />
 
               <Route path="/game/mines" element={<Mines />} />
+              <Route path="/game/wheel" element={<WheelGame />} />
             </Routes>
             <Footer />
           </Providers>

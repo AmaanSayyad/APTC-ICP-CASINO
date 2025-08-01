@@ -4,14 +4,20 @@ import { Principal } from "@dfinity/principal";
 import { idlFactory } from "../../../declarations/APTC-token/APTC-token.did.js";
 import { createActor } from "../../../declarations/APTC-token/index.js";
 import { idlFactory as rouletteIdl } from "../../../declarations/roulette-game/roulette-game.did.js";
+import { idlFactory as minesIdl } from "../../../declarations/mines-game/mines-game.did.js";
+import { createActor as createMinesActorRaw } from "../../../declarations/mines-game/index.js";
+import { MinesClient } from "./mines-integration"; // Import the new MinesClient
+
 // Environment variables and canister IDs
 export const CANISTER_IDS = {
   APTC_TOKEN:
-    process.env.CANISTER_ID_APTC_TOKEN || "be2us-64aaa-aaaaa-qaabq-cai",
+    process.env.CANISTER_ID_APTC_TOKEN || "bkyz2-fmaaa-aaaaa-qaaaq-cai",
   ROULETTE_GAME:
-    process.env.CANISTER_ID_ROULETTE_GAME || "bw4dl-smaaa-aaaaa-qaacq-cai",
+    process.env.CANISTER_ID_ROULETTE_GAME || "br5f7-7uaaa-aaaaa-qaaca-cai",
   MINES_GAME:
-    process.env.CANISTER_ID_MINES_GAME || "be2us-64aaa-aaaaa-qaabq-cai",
+    process.env.CANISTER_ID_MINES_GAME || "bw4dl-smaaa-aaaaa-qaacq-cai",
+  WHEEL_GAME:
+    process.env.CANISTER_ID_WHEEL_GAME || "bd3sg-teaaa-aaaaa-qaaba-cai",
   FRONTEND:
     process.env.CANISTER_ID_APT_CASINO_FRONTEND ||
     "be2us-64aaa-aaaaa-qaabq-cai",
@@ -270,132 +276,6 @@ export const getFallbackAgent = async (
   return await getCachedAgent(identity, cacheKey);
 };
 
-// Mines Game IDL - Updated to match backend
-const minesIdl = ({ IDL }) => {
-  const CellState = IDL.Variant({
-    Hidden: IDL.Null,
-    Revealed: IDL.Null,
-    Mine: IDL.Null,
-    Safe: IDL.Null,
-  });
-
-  const GameState = IDL.Variant({
-    NotStarted: IDL.Null,
-    InProgress: IDL.Null,
-    Won: IDL.Null,
-    Lost: IDL.Null,
-    Cashed: IDL.Null,
-  });
-
-  const MinesGameSession = IDL.Record({
-    player: IDL.Principal,
-    betAmount: IDL.Nat,
-    mineCount: IDL.Nat,
-    gameState: GameState,
-    grid: IDL.Vec(CellState),
-    minePositions: IDL.Vec(IDL.Nat),
-    revealedCells: IDL.Vec(IDL.Nat),
-    multiplier: IDL.Float64,
-    potentialWin: IDL.Nat,
-    startTime: IDL.Int,
-    endTime: IDL.Opt(IDL.Int),
-  });
-
-  const GameResult = IDL.Record({
-    gameId: IDL.Nat,
-    player: IDL.Principal,
-    betAmount: IDL.Nat,
-    winAmount: IDL.Nat,
-    mineCount: IDL.Nat,
-    revealedCells: IDL.Vec(IDL.Nat),
-    minePositions: IDL.Vec(IDL.Nat),
-    gameState: GameState,
-    timestamp: IDL.Int,
-  });
-
-  const UserStats = IDL.Record({
-    totalBets: IDL.Nat,
-    totalWagered: IDL.Nat,
-    totalWon: IDL.Nat,
-    biggestWin: IDL.Nat,
-    gamesPlayed: IDL.Nat,
-  });
-
-  const MinesError = IDL.Variant({
-    NotAuthorized: IDL.Null,
-    GameNotFound: IDL.Null,
-    GameNotInProgress: IDL.Null,
-    InvalidCellIndex: IDL.Null,
-    CellAlreadyRevealed: IDL.Null,
-    InsufficientBalance: IDL.Null,
-    InvalidBetAmount: IDL.Null,
-    InvalidMineCount: IDL.Null,
-    TransferFailed: IDL.Text,
-    GameNotStarted: IDL.Null,
-    TooManyMines: IDL.Null,
-    TooFewMines: IDL.Null,
-    CooldownActive: IDL.Null,
-    GameInactive: IDL.Null,
-    NotInitialized: IDL.Null,
-    TokenTransferError: IDL.Text,
-    TokenApproveError: IDL.Text,
-    TokenTransferFromError: IDL.Text,
-    InsufficientAllowance: IDL.Null,
-  });
-
-  const MinesGameResult = IDL.Variant({
-    Ok: MinesGameSession,
-    Err: MinesError,
-  });
-
-  const CashOutResult = IDL.Variant({
-    Ok: GameResult,
-    Err: MinesError,
-  });
-
-  const GameStats = IDL.Record({
-    totalGames: IDL.Nat,
-    totalVolume: IDL.Nat,
-    houseProfits: IDL.Nat,
-    activeGamesCount: IDL.Nat,
-  });
-
-  const BetLimits = IDL.Record({
-    minBet: IDL.Nat,
-    maxBet: IDL.Nat,
-  });
-
-  return IDL.Service({
-    // Game actions
-    startGame: IDL.Func([IDL.Nat, IDL.Nat], [MinesGameResult], []),
-    revealCell: IDL.Func([IDL.Nat], [MinesGameResult], []),
-    cashOut: IDL.Func([], [CashOutResult], []),
-
-    // Queries
-    getActiveGame: IDL.Func(
-      [IDL.Principal],
-      [IDL.Opt(MinesGameSession)],
-      ["query"]
-    ),
-    getGameHistory: IDL.Func(
-      [IDL.Principal, IDL.Opt(IDL.Nat)],
-      [IDL.Vec(GameResult)],
-      ["query"]
-    ),
-    getUserBalance: IDL.Func([IDL.Principal], [IDL.Nat], ["query"]),
-    getPlayerTokenBalance: IDL.Func([IDL.Principal], [IDL.Nat], []),
-    getUserStats: IDL.Func([IDL.Principal], [IDL.Opt(UserStats)], ["query"]),
-    getGameStats: IDL.Func([], [GameStats], ["query"]),
-    getBetLimits: IDL.Func([], [BetLimits], ["query"]),
-    isGameActive: IDL.Func([], [IDL.Bool], ["query"]),
-    getMultiplierForMines: IDL.Func(
-      [IDL.Nat, IDL.Nat],
-      [IDL.Float64],
-      ["query"]
-    ),
-  });
-};
-
 // Actor creation functions with optional agent parameter for certificate handling
 export const createAPTCTokenActor = async (identity = null, agent = null) => {
   try {
@@ -420,17 +300,12 @@ export const createRouletteActor = async (identity = null, agent = null) => {
   }
 };
 
-export const createMinesActor = async (identity = null, agent = null) => {
-  try {
-    const effectiveAgent = agent || (await createAgent(identity));
-    return Actor.createActor(minesIdl, {
-      agent: effectiveAgent,
-      canisterId: CANISTER_IDS.MINES_GAME,
-    });
-  } catch (err) {
-    console.error("Failed to create Mines actor:", err);
-    throw err;
-  }
+export const createMinesActor = async (identity = null) => {
+  // Create a new MinesClient instance
+  const minesClient = new MinesClient(CANISTER_IDS.MINES_GAME);
+  // Initialize with the identity
+  await minesClient.init(identity);
+  return minesClient;
 };
 
 // Utility functions for token amounts - Using simple Number format like Number(bet.winnings) / 100000000
